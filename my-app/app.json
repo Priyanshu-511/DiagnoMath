@@ -1,15 +1,14 @@
 {
   "expo": {
-    "name": "my-app",
-    "slug": "my-app",
+    "name": "client",
+    "slug": "client",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
+    "scheme": "client",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "icon": "./assets/expo.icon"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,11 +17,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "android.permission.RECORD_AUDIO"
-      ]
+      "package": "com.priyanshu511.client"
     },
     "web": {
       "output": "static",
@@ -33,19 +29,9 @@
       [
         "expo-splash-screen",
         {
+          "backgroundColor": "#208AEF",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
-        }
-      ],
-      [
-        "expo-image-picker",
-        {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera."
+          "imageWidth": 76
         }
       ]
     ],
@@ -56,9 +42,8 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "40efb83a-1dfc-4966-97a2-39d9fc3cc4a6"
+        "projectId": "e8a0184a-1588-4106-a5e2-089170392117"
       }
-    },
-    "owner": "priyanshu511"
+    }
   }
 }
