@@ -31,11 +31,9 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies
-        working-directory: my-app
         run: npm install
 
       - name: Build Android APK
-        working-directory: my-app
         run: |
           eas build \
             --platform android \
@@ -45,7 +43,6 @@ jobs:
             --json > eas-build.json
 
       - name: Get APK URL
-        working-directory: my-app
         run: |
           node -e "
           const fs = require('fs');
@@ -70,9 +67,8 @@ jobs:
           "
 
       - name: Download APK
-        working-directory: my-app
         run: |
-          curl -L "$(cat apk-url.txt)" -o ../DiagnoMath.apk
+          curl -L "$(cat apk-url.txt)" -o DiagnoMath.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
