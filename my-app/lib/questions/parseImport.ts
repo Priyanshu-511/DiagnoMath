@@ -1,5 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
@@ -95,6 +95,45 @@ function rowsToQuestions(rows: Record<string, string>[]): { questions: Question[
   return { questions, errors };
 }
 
+/**
+ * Read a file as a UTF-8 string — works on both web and native.
+ *
+ * On web  : fetch() handles blob: and file: URIs from DocumentPicker.
+ * On native: expo-file-system is lazily imported so the web bundle
+ *            never references the native module at all.
+ */
+async function readAsText(uri: string): Promise<string> {
+  if (Platform.OS === 'web') {
+    const res = await fetch(uri);
+    return res.text();
+  }
+  const FileSystem = await import('expo-file-system/legacy');
+  return FileSystem.readAsStringAsync(uri, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+}
+
+/**
+ * Read a file as a base64-encoded string — works on both web and native.
+ *
+ * On web  : fetch() → arrayBuffer → btoa().
+ * On native: expo-file-system lazy import.
+ */
+async function readAsBase64(uri: string): Promise<string> {
+  if (Platform.OS === 'web') {
+    const res = await fetch(uri);
+    const buffer = await res.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    bytes.forEach((b) => (binary += String.fromCharCode(b)));
+    return btoa(binary);
+  }
+  const FileSystem = await import('expo-file-system/legacy');
+  return FileSystem.readAsStringAsync(uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+}
+
 export async function pickAndParseQuestionFile(): Promise<ParseResult> {
   const picked = await DocumentPicker.getDocumentAsync({
     type: [
@@ -115,15 +154,11 @@ export async function pickAndParseQuestionFile(): Promise<ParseResult> {
 
   let rows: Record<string, string>[];
   if (isCsv) {
-    const text = await FileSystem.readAsStringAsync(asset.uri, {
-      encoding: FileSystem.EncodingType.UTF8,
-    });
+    const text = await readAsText(asset.uri);
     const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
     rows = parsed.data as Record<string, string>[];
   } else {
-    const base64 = await FileSystem.readAsStringAsync(asset.uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+    const base64 = await readAsBase64(asset.uri);
     const workbook = XLSX.read(base64, { type: 'base64' });
     const sheetName = workbook.SheetNames[0];
     rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' }) as Record<

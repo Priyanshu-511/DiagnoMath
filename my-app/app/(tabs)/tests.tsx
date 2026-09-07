@@ -5,7 +5,6 @@ import { router } from 'expo-router';
 const items: { label: string; route: string }[] = [
   { label: '📥 Import Questions (CSV/Excel)', route: '/questions-import' },
   { label: '📝 Create Test', route: '/tests-create' },
-  { label: '🖨️ Print / Share Sheets', route: '/tests-sheet' },
   { label: '📷 Scan Answer Sheet', route: '/scan' },
   { label: '📊 View Results', route: '/results' },
 ];

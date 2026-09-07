@@ -51,6 +51,10 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="login" options={{ headerShown: false }} />
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+            <Stack.Screen
+              name="handwritten-scan"
+              options={{ title: 'Handwritten Answers', headerShown: true }}
+            />
           </Stack>
         </AuthGate>
         <StatusBar style="auto" />

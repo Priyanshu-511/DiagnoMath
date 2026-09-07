@@ -5,8 +5,8 @@ export default function TabLayout() {
     <Tabs screenOptions={{ headerShown: false }}>
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
       <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
-      <Tabs.Screen name="upload" options={{ title: 'Upload' }} />
-      <Tabs.Screen name="tests" options={{ title: 'Tests' }} />
+      <Tabs.Screen name="upload" options={{ href: null }} />
+      <Tabs.Screen name="tests" options={{ href: null }} />
     </Tabs>
   );
 }
