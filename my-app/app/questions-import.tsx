@@ -44,7 +44,8 @@ export default function ImportQuestionsScreen() {
       <Text style={styles.heading}>Import Questions</Text>
       <Text style={styles.hint}>
         CSV or Excel with columns: topic, question, optionA, optionB, optionC, optionD, answer
-        (A–D, 1-4, or the exact option text)
+        (A–D, 1-4, or the exact option text).{'\n\n'}
+        For DINA diagnosis, add skill columns: skill:LCD, skill:NumOp, skill:Simplify, etc. (1 = required, 0 = not)
       </Text>
 
       <TouchableOpacity style={styles.button} onPress={handleImport} disabled={loading}>

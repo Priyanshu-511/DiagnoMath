@@ -58,6 +58,15 @@ function rowsToQuestions(rows: Record<string, string>[]): { questions: Question[
     return { questions: [], errors: [`Missing column(s): ${missing.join(', ')}`] };
   }
 
+  // Auto-detect skill columns — headers like "skill:LCD", "skill:NumOp", etc.
+  const allHeaders = Object.keys(rows[0]);
+  const skillColumns: { header: string; skillName: string }[] = allHeaders
+    .filter((h) => /^skill[:\s]/i.test(h.trim()))
+    .map((h) => ({
+      header: h,
+      skillName: h.trim().replace(/^skill[:\s]\s*/i, '').trim(),
+    }));
+
   const questions: Question[] = [];
   const errors: string[] = [];
 
@@ -83,12 +92,23 @@ function rowsToQuestions(rows: Record<string, string>[]): { questions: Question[
       return;
     }
 
+    // Build skills map from skill columns (if any)
+    let skills: Record<string, 0 | 1> | undefined;
+    if (skillColumns.length > 0) {
+      skills = {};
+      for (const sc of skillColumns) {
+        const val = String(row[sc.header] ?? '').trim().toLowerCase();
+        skills[sc.skillName] = ['1', '1.0', 'true', 'yes', 'y'].includes(val) ? 1 : 0;
+      }
+    }
+
     questions.push({
       id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
       topic,
       text,
       options,
       correctIndex,
+      ...(skills ? { skills } : {}),
     });
   });
 

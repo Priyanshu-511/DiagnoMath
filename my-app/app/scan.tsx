@@ -56,6 +56,7 @@ export default function ScanScreen() {
         weakTopics: diagnosis.weakTopics,
         flaggedQuestions: diagnosis.flaggedQuestions,
         scannedAt: new Date().toISOString(),
+        ...(diagnosis.dina ? { dina: diagnosis.dina } : {}),
       });
       router.push('/results');
     } catch (err: any) {
@@ -130,6 +131,31 @@ export default function ScanScreen() {
                 <Text style={styles.weakSummary}>Weak areas: {diagnosis.weakTopics.join(', ')}</Text>
               )}
 
+              {diagnosis.dina && (
+                <View style={styles.dinaBox}>
+                  <Text style={styles.dinaTitle}>🧠 DINA Cognitive Diagnosis</Text>
+                  <Text style={styles.dinaProfile}>{diagnosis.dina.profileLabel}</Text>
+                  <Text style={styles.dinaDetail}>
+                    Likelihood: {diagnosis.dina.likelihood.toFixed(3)} · Margin: ≈
+                    {diagnosis.dina.marginOverRunnerUp === Infinity
+                      ? '∞'
+                      : diagnosis.dina.marginOverRunnerUp > 1000
+                      ? '>1000x'
+                      : `${diagnosis.dina.marginOverRunnerUp}x`}{' '}
+                    more likely
+                  </Text>
+                  <View style={styles.skillBadges}>
+                    {diagnosis.dina.profile.map((sm) => (
+                      <View key={sm.skill} style={[styles.skillBadge, sm.mastered ? styles.skillBadgeOk : styles.skillBadgeWeak]}>
+                        <Text style={[styles.skillBadgeText, sm.mastered ? styles.skillBadgeTextOk : styles.skillBadgeTextWeak]}>
+                          {sm.mastered ? '✅' : '❌'} {sm.skill}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
               <TouchableOpacity style={styles.button} onPress={handleSave} disabled={saving}>
                 <Text style={styles.buttonText}>{saving ? 'Saving…' : 'Save Result'}</Text>
               </TouchableOpacity>
@@ -187,4 +213,23 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   retryButton: { alignItems: 'center', marginTop: 8 },
   retryText: { color: '#3B82F6', fontWeight: '600' },
+  dinaBox: {
+    marginTop: 12,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+    borderRadius: 12,
+    padding: 14,
+    gap: 4,
+  },
+  dinaTitle: { fontSize: 14, fontWeight: '700', color: '#1E3A8A', marginBottom: 4 },
+  dinaProfile: { fontSize: 14, fontWeight: '600', color: '#1E40AF' },
+  dinaDetail: { fontSize: 12, color: '#4B5563' },
+  skillBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  skillBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+  skillBadgeOk: { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' },
+  skillBadgeWeak: { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
+  skillBadgeText: { fontSize: 13, fontWeight: '600' },
+  skillBadgeTextOk: { color: '#166534' },
+  skillBadgeTextWeak: { color: '#991B1B' },
 });

@@ -32,6 +32,7 @@ export default function ResultsScreen() {
               {r.score}/{r.totalQuestions} ({r.percent}%)
             </Text>
             {r.weakTopics.length > 0 && <Text style={styles.itemWeak}>Weak: {r.weakTopics.join(', ')}</Text>}
+            {r.dina && <Text style={styles.itemDina}>🧠 {r.dina.profileLabel}</Text>}
           </TouchableOpacity>
         ))
       )}
@@ -54,4 +55,5 @@ const styles = StyleSheet.create({
   itemTitle: { fontSize: 14, fontWeight: '700', color: '#1E3A8A' },
   itemSub: { fontSize: 13, color: '#166534' },
   itemWeak: { fontSize: 12, color: '#B45309', marginTop: 2 },
+  itemDina: { fontSize: 12, color: '#1E40AF', marginTop: 4, lineHeight: 18, fontWeight: '500' },
 });

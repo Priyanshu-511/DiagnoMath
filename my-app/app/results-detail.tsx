@@ -58,6 +58,39 @@ export default function ResultDetailScreen() {
           </Text>
         </View>
       )}
+
+      {result.dina && (
+        <View style={styles.dinaBox}>
+          <Text style={styles.dinaTitle}>🧠 DINA Cognitive Diagnosis</Text>
+          <Text style={styles.dinaProfile}>{result.dina.profileLabel}</Text>
+          <Text style={styles.dinaDetail}>
+            Likelihood: {result.dina.likelihood.toFixed(3)} · Margin: ≈
+            {result.dina.marginOverRunnerUp === Infinity
+              ? '∞'
+              : result.dina.marginOverRunnerUp > 1000
+              ? '>1000x'
+              : `${result.dina.marginOverRunnerUp}x`}{' '}
+            more likely than runner-up
+          </Text>
+
+          <Text style={styles.dinaSkillHeading}>Skill Mastery</Text>
+          <View style={styles.skillBadges}>
+            {result.dina.profile.map((sm) => (
+              <View key={sm.skill} style={[styles.skillBadge, sm.mastered ? styles.skillBadgeOk : styles.skillBadgeWeak]}>
+                <Text style={[styles.skillBadgeText, sm.mastered ? styles.skillBadgeTextOk : styles.skillBadgeTextWeak]}>
+                  {sm.mastered ? '✅' : '❌'} {sm.skill}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {result.dina.weakSkills.length > 0 && (
+            <Text style={styles.dinaWeakSummary}>
+              Not mastered: {result.dina.weakSkills.join(', ')}
+            </Text>
+          )}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -83,4 +116,30 @@ const styles = StyleSheet.create({
   },
   diagnosisTitle: { fontSize: 14, fontWeight: '700', color: '#92400E', marginBottom: 4 },
   diagnosisText: { fontSize: 13, color: '#92400E' },
+  dinaBox: {
+    marginTop: 16,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+    borderRadius: 12,
+    padding: 14,
+    gap: 4,
+  },
+  dinaTitle: { fontSize: 15, fontWeight: '700', color: '#1E3A8A', marginBottom: 4 },
+  dinaProfile: { fontSize: 14, fontWeight: '600', color: '#1E40AF' },
+  dinaDetail: { fontSize: 12, color: '#4B5563', marginBottom: 4 },
+  dinaSkillHeading: { fontSize: 13, fontWeight: '600', color: '#1E3A8A', marginTop: 4 },
+  skillBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  skillBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+  skillBadgeOk: { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' },
+  skillBadgeWeak: { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
+  skillBadgeText: { fontSize: 13, fontWeight: '600' },
+  skillBadgeTextOk: { color: '#166534' },
+  skillBadgeTextWeak: { color: '#991B1B' },
+  dinaWeakSummary: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#B45309',
+    marginTop: 8,
+  },
 });
