@@ -7,9 +7,9 @@
     "icon": "./assets/images/icon.png",
     "scheme": "client",
     "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
     "ios": {
-      "icon": "./assets/expo.icon",
-      "newArchEnabled": false
+      "icon": "./assets/expo.icon"
     },
     "android": {
       "adaptiveIcon": {
@@ -19,8 +19,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.priyanshu511.client",
-      "newArchEnabled": false
+      "package": "com.priyanshu511.client"
     },
     "web": {
       "output": "static",
