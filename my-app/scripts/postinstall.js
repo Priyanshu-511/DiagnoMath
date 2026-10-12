@@ -1,68 +1,74 @@
 const fs = require('fs');
 const path = require('path');
 
-// Fix @react-native-ml-kit/text-recognition build.gradle for RN 0.73+
-const buildGradlePath = path.join(
-  process.cwd(),
-  'node_modules/@react-native-ml-kit/text-recognition/android/build.gradle'
-);
+// Candidate paths for @react-native-ml-kit/text-recognition build.gradle
+const candidatePaths = [
+  path.join(process.cwd(), 'node_modules/@react-native-ml-kit/text-recognition/android/build.gradle'),
+  path.join(__dirname, '..', 'node_modules/@react-native-ml-kit/text-recognition/android/build.gradle'),
+];
 
-if (fs.existsSync(buildGradlePath)) {
+const buildGradlePath = candidatePaths.find((p) => fs.existsSync(p));
+
+if (buildGradlePath) {
   let content = fs.readFileSync(buildGradlePath, 'utf8');
 
-  // Only patch if it still has the old incompatible react-native:+ dependency
-  if (content.includes("implementation 'com.facebook.react:react-native:+'")) {
-    console.log('[postinstall] Patching @react-native-ml-kit/text-recognition build.gradle...');
-    
-    // Replace old react-native:+ with new react-android
-    content = content.replace(
-      "    //noinspection GradleDynamicVersion\n    implementation 'com.facebook.react:react-native:+'  // From node_modules",
-      "    implementation(\"com.facebook.react:react-android\")"
-    );
+  let modified = false;
 
-    // Remove the outdated buildscript block (not needed when included as a subproject)
+  // 1. Replace old react-native:+ dependency with modern react-android
+  if (content.includes('react-native:+')) {
     content = content.replace(
-      /buildscript \{[\s\S]*?if \(project == rootProject\) \{[\s\S]*?\}\s*\}\n\n/,
+      /\/\/noinspection GradleDynamicVersion\s*\n\s*implementation\s+['"]com\.facebook\.react:react-native:\+['"].*/,
+      'implementation("com.facebook.react:react-android")'
+    );
+    // Fallback simple replace if regex didn't match full comment
+    content = content.replace(
+      /implementation\s+['"]com\.facebook\.react:react-native:\+['"].*/,
+      'implementation("com.facebook.react:react-android")'
+    );
+    modified = true;
+  }
+
+  // 2. Remove outdated standalone buildscript block
+  if (content.includes('classpath \'com.android.tools.build:gradle:3.4.1\'')) {
+    content = content.replace(
+      /buildscript \{[\s\S]*?if \(project == rootProject\) \{[\s\S]*?\}\s*\}\n*/,
       ''
     );
+    modified = true;
+  }
 
-    // Update compileSdkVersion to use a modern default via safeExtGet
-    content = content.replace(
-      /def DEFAULT_COMPILE_SDK_VERSION = \d+\n/,
-      'def DEFAULT_COMPILE_SDK_VERSION = 35\n'
-    );
-    content = content.replace(
-      /def DEFAULT_BUILD_TOOLS_VERSION = '[\d.]+'\n/,
-      "def DEFAULT_BUILD_TOOLS_VERSION = '35.0.0'\n"
-    );
-    content = content.replace(
-      /def DEFAULT_MIN_SDK_VERSION = \d+\n/,
-      'def DEFAULT_MIN_SDK_VERSION = 24\n'
-    );
-    content = content.replace(
-      /def DEFAULT_TARGET_SDK_VERSION = \d+\n/,
-      'def DEFAULT_TARGET_SDK_VERSION = 35\n'
-    );
+  // 3. Update default SDK versions
+  content = content.replace(/def DEFAULT_COMPILE_SDK_VERSION = \d+/, 'def DEFAULT_COMPILE_SDK_VERSION = 35');
+  content = content.replace(/def DEFAULT_BUILD_TOOLS_VERSION = '[\d.]+'/, "def DEFAULT_BUILD_TOOLS_VERSION = '35.0.0'");
+  content = content.replace(/def DEFAULT_MIN_SDK_VERSION = \d+/, 'def DEFAULT_MIN_SDK_VERSION = 24');
+  content = content.replace(/def DEFAULT_TARGET_SDK_VERSION = \d+/, 'def DEFAULT_TARGET_SDK_VERSION = 35');
 
-    // Add namespace if not present
-    if (!content.includes('namespace')) {
-      content = content.replace(
-        'android {',
-        "android {\n    namespace 'com.reactnativemlkittextrecognition'"
-      );
-    }
-
-    // Remove the outdated repositories block referencing old RN paths
+  // 4. Ensure namespace is set correctly to 'com.rnmlkit.textrecognition' (matching Java package)
+  if (content.includes("namespace 'com.reactnativemlkittextrecognition'")) {
     content = content.replace(
-      /\nrepositories \{[\s\S]*?google\(\)\n\}\n/,
+      "namespace 'com.reactnativemlkittextrecognition'",
+      "namespace 'com.rnmlkit.textrecognition'"
+    );
+    modified = true;
+  } else if (!content.includes("namespace 'com.rnmlkit.textrecognition'")) {
+    content = content.replace(
+      'android {',
+      "android {\n    namespace 'com.rnmlkit.textrecognition'"
+    );
+    modified = true;
+  }
+
+  // 5. Remove outdated repositories block
+  if (content.includes('$rootDir/../node_modules/react-native/android')) {
+    content = content.replace(
+      /\nrepositories \{[\s\S]*?google\(\)\n\}\n*/,
       '\n'
     );
-
-    fs.writeFileSync(buildGradlePath, content, 'utf8');
-    console.log('[postinstall] ✓ Patched @react-native-ml-kit/text-recognition build.gradle');
-  } else {
-    console.log('[postinstall] @react-native-ml-kit/text-recognition already patched, skipping.');
+    modified = true;
   }
+
+  fs.writeFileSync(buildGradlePath, content, 'utf8');
+  console.log('[postinstall] ✓ Verified @react-native-ml-kit/text-recognition build.gradle');
 } else {
-  console.log('[postinstall] @react-native-ml-kit/text-recognition not found, skipping patch.');
+  console.log('[postinstall] Note: @react-native-ml-kit/text-recognition not found, skipping patch.');
 }
