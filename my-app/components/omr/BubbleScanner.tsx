@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
@@ -12,9 +12,11 @@ interface Props {
   questionCount: number;
   onScanned: (detected: DetectedAnswer[]) => void;
   onError: (message: string) => void;
+  /** When provided the scanner auto-opens the specified picker immediately */
+  initialMode?: 'camera' | 'gallery';
 }
 
-export default function BubbleScanner({ questionCount, onScanned, onError }: Props) {
+export default function BubbleScanner({ questionCount, onScanned, onError, initialMode }: Props) {
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
 
@@ -58,6 +60,13 @@ export default function BubbleScanner({ questionCount, onScanned, onError }: Pro
     }
   };
 
+  // Auto-trigger the picker when initialMode is set
+  useEffect(() => {
+    if (initialMode === 'camera') capture(true);
+    else if (initialMode === 'gallery') capture(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleMessage = (event: any) => {
     setProcessing(false);
     try {
@@ -89,14 +98,17 @@ export default function BubbleScanner({ questionCount, onScanned, onError }: Pro
         line up with where the app expects them.
       </Text>
 
-      <View style={styles.row}>
-        <TouchableOpacity style={styles.button} onPress={() => capture(true)} disabled={processing}>
-          <Text style={styles.buttonText}>📷 Capture Sheet</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.buttonAlt} onPress={() => capture(false)} disabled={processing}>
-          <Text style={styles.buttonTextAlt}>🖼️ Pick from Gallery</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Fallback manual pickers (shown only if auto-trigger didn't open or user wants to retry) */}
+      {!imageBase64 && !processing && (
+        <View style={styles.row}>
+          <TouchableOpacity style={styles.button} onPress={() => capture(true)} disabled={processing}>
+            <Text style={styles.buttonText}>📷 Capture Sheet</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.buttonAlt} onPress={() => capture(false)} disabled={processing}>
+            <Text style={styles.buttonTextAlt}>🖼️ Pick from Gallery</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {processing && (
         <View style={styles.processing}>

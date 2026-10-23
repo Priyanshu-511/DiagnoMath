@@ -10,9 +10,12 @@ import { saveResult } from '@/lib/results/store';
 import { TestTemplate } from '@/lib/tests/types';
 import { listTests } from '@/lib/tests/store';
 
+type ScanMode = 'camera' | 'gallery' | null;
+
 export default function ScanScreen() {
   const [tests, setTests] = useState<TestTemplate[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [scanMode, setScanMode] = useState<ScanMode>(null);
   const [studentName, setStudentName] = useState('');
   const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
   const [saving, setSaving] = useState(false);
@@ -23,6 +26,14 @@ export default function ScanScreen() {
   }, []);
 
   const selected = tests.find((t) => t.id === selectedId) ?? null;
+
+  /** Reset scan mode and diagnosis when user changes test selection */
+  const handleSelectTest = (id: string) => {
+    setSelectedId(id);
+    setScanMode(null);
+    setDiagnosis(null);
+    setError('');
+  };
 
   const handleScanned = async (detected: DetectedAnswer[]) => {
     if (!selected) return;
@@ -77,7 +88,7 @@ export default function ScanScreen() {
             <Text style={styles.hint}>No tests yet — create one first.</Text>
           ) : (
             tests.map((t) => (
-              <TouchableOpacity key={t.id} style={styles.item} onPress={() => setSelectedId(t.id)}>
+              <TouchableOpacity key={t.id} style={styles.item} onPress={() => handleSelectTest(t.id)}>
                 <Text style={styles.itemText}>
                   {t.name} ({t.questionIds.length} questions)
                 </Text>
@@ -87,9 +98,14 @@ export default function ScanScreen() {
         </>
       ) : (
         <>
-          <Text style={styles.testLabel}>
-            {selected.name} · {selected.questionIds.length} questions
-          </Text>
+          <View style={styles.testHeader}>
+            <Text style={styles.testLabel}>
+              {selected.name} · {selected.questionIds.length} questions
+            </Text>
+            <TouchableOpacity onPress={() => { setSelectedId(null); setScanMode(null); setDiagnosis(null); setError(''); }}>
+              <Text style={styles.changeTest}>Change</Text>
+            </TouchableOpacity>
+          </View>
 
           <TextInput
             style={styles.input}
@@ -98,12 +114,49 @@ export default function ScanScreen() {
             onChangeText={setStudentName}
           />
 
-          {!diagnosis && (
-            <BubbleScanner
-              questionCount={selected.questionIds.length}
-              onScanned={handleScanned}
-              onError={setError}
-            />
+          {/* ── Scan mode selector ──────────────────────────────────────── */}
+          {!diagnosis && !scanMode && (
+            <View style={styles.modeSection}>
+              <Text style={styles.modeLabel}>How would you like to submit the answer sheet?</Text>
+              <View style={styles.modeRow}>
+                <TouchableOpacity
+                  style={styles.modeCard}
+                  onPress={() => setScanMode('camera')}
+                >
+                  <Text style={styles.modeIcon}>📷</Text>
+                  <Text style={styles.modeTitle}>Scan with Camera</Text>
+                  <Text style={styles.modeDesc}>Use your camera to capture the sheet in real time</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.modeCard, styles.modeCardAlt]}
+                  onPress={() => setScanMode('gallery')}
+                >
+                  <Text style={styles.modeIcon}>🖼️</Text>
+                  <Text style={styles.modeTitle}>Upload Image</Text>
+                  <Text style={styles.modeDesc}>Pick an existing photo from your gallery to verify</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {!diagnosis && scanMode && (
+            <>
+              <View style={styles.modeActiveBar}>
+                <Text style={styles.modeActiveText}>
+                  {scanMode === 'camera' ? '📷 Camera mode' : '🖼️ Gallery upload mode'}
+                </Text>
+                <TouchableOpacity onPress={() => { setScanMode(null); setError(''); }}>
+                  <Text style={styles.changeModeText}>Change</Text>
+                </TouchableOpacity>
+              </View>
+              <BubbleScanner
+                questionCount={selected.questionIds.length}
+                onScanned={handleScanned}
+                onError={setError}
+                initialMode={scanMode}
+              />
+            </>
           )}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -185,7 +238,9 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   itemText: { fontSize: 14, color: '#1E3A8A' },
-  testLabel: { fontSize: 16, fontWeight: '700', color: '#1E3A8A' },
+  testHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  testLabel: { fontSize: 16, fontWeight: '700', color: '#1E3A8A', flex: 1 },
+  changeTest: { fontSize: 13, color: '#3B82F6', fontWeight: '600', marginLeft: 8 },
   input: {
     borderWidth: 1,
     borderColor: '#BEF264',
@@ -195,6 +250,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontSize: 15,
   },
+  /* Scan mode picker */
+  modeSection: { marginTop: 4, gap: 10 },
+  modeLabel: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  modeRow: { flexDirection: 'row', gap: 12 },
+  modeCard: {
+    flex: 1,
+    backgroundColor: '#DBEAFE',
+    borderRadius: 14,
+    paddingVertical: 18,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: '#93C5FD',
+  },
+  modeCardAlt: {
+    backgroundColor: '#ECFCCB',
+    borderColor: '#BEF264',
+  },
+  modeIcon: { fontSize: 30 },
+  modeTitle: { fontSize: 13, fontWeight: '700', color: '#1E3A8A', textAlign: 'center' },
+  modeDesc: { fontSize: 11, color: '#4B5563', textAlign: 'center', lineHeight: 15 },
+  /* Active mode bar */
+  modeActiveBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    marginTop: 4,
+  },
+  modeActiveText: { fontSize: 13, fontWeight: '600', color: '#1E40AF' },
+  changeModeText: { fontSize: 13, color: '#3B82F6', fontWeight: '600' },
   error: { color: '#DC2626', fontSize: 13 },
   result: { marginTop: 12, gap: 6 },
   resultScore: { fontSize: 20, fontWeight: '700', color: '#1E3A8A' },
