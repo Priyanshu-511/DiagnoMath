@@ -32,6 +32,7 @@ const QUOTES = [
 
 const SLIDE_INTERVAL = 4000;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_WIDTH = (SCREEN_WIDTH - 20 * 2 - 12) / 2;
 
 function QuoteCarousel() {
   const [active, setActive] = useState(0);
@@ -39,7 +40,6 @@ function QuoteCarousel() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      // Fade out → swap → fade in
       Animated.timing(fadeAnim, {
         toValue: 0,
         duration: 350,
@@ -53,7 +53,6 @@ function QuoteCarousel() {
         }).start();
       });
     }, SLIDE_INTERVAL);
-
     return () => clearInterval(timer);
   }, [fadeAnim]);
 
@@ -66,19 +65,22 @@ function QuoteCarousel() {
         <Text style={styles.quoteText}>{quote.text}</Text>
         <Text style={styles.quoteAuthor}>{quote.author}</Text>
       </Animated.View>
-
-      {/* Dot indicators */}
       <View style={styles.dots}>
         {QUOTES.map((_, i) => (
-          <View
-            key={i}
-            style={[styles.dot, i === active && styles.dotActive]}
-          />
+          <View key={i} style={[styles.dot, i === active && styles.dotActive]} />
         ))}
       </View>
     </View>
   );
 }
+
+// ── Action card data ──────────────────────────────────────────────────────────
+const GRID_ACTIONS = [
+  { icon: '📷', label: 'Scan OMR',    route: '/scan',            bg: '#DBEAFE', border: '#93C5FD' },
+  { icon: '✏️', label: 'Handwritten', route: '/handwritten-scan', bg: '#ECFCCB', border: '#BEF264' },
+  { icon: '📥', label: 'Import Q\'s', route: '/questions-import', bg: '#EDE9FE', border: '#C4B5FD' },
+  { icon: '📊', label: 'Results',     route: '/results',          bg: '#FEF3C7', border: '#FCD34D' },
+];
 
 export default function HomeScreen() {
   const { user, logout } = useAuth();
@@ -88,10 +90,7 @@ export default function HomeScreen() {
     router.replace('/login');
   };
 
-  // Derive first name for a friendly greeting
   const firstName = user?.name?.split(' ')[0] ?? 'Teacher';
-
-  // Time-based greeting
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -99,26 +98,18 @@ export default function HomeScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
 
-      {/* ── Hero greeting card ────────────────────────────────────────────── */}
+      {/* ── Hero card ───────────────────────────────────────────────────────── */}
       <View style={styles.heroCard}>
         <View style={styles.heroRow}>
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>
-              {firstName.charAt(0).toUpperCase()}
-            </Text>
+            <Text style={styles.avatarText}>{firstName.charAt(0).toUpperCase()}</Text>
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.greetingLabel}>{greeting},</Text>
             <Text style={styles.greetingName}>{user?.name ?? 'Teacher'} 👋</Text>
-          </View>
-          <View style={styles.classBadge}>
-            <Text style={styles.classBadgeText}>Class 6</Text>
+            {user?.email ? <Text style={styles.emailText}>{user.email}</Text> : null}
           </View>
         </View>
-
-        {user?.email ? (
-          <Text style={styles.emailText}>{user.email}</Text>
-        ) : null}
 
         <View style={styles.statRow}>
           <View style={styles.stat}>
@@ -138,50 +129,42 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* ── Motivational quote carousel ───────────────────────────────────── */}
+      {/* ── Quote carousel ──────────────────────────────────────────────────── */}
       <QuoteCarousel />
 
-      {/* ── Quick actions ─────────────────────────────────────────────────── */}
+      {/* ── Quick Actions (2×2 grid) ─────────────────────────────────────────── */}
       <Text style={styles.sectionLabel}>Quick Actions</Text>
       <View style={styles.actionsGrid}>
-        <TouchableOpacity
-          style={[styles.actionCard, { backgroundColor: '#DBEAFE' }]}
-          onPress={() => router.push('/scan' as any)}
-        >
-          <Text style={styles.actionIcon}>⬛</Text>
-          <Text style={styles.actionText}>Scan OMR</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionCard, { backgroundColor: '#ECFCCB' }]}
-          onPress={() => router.push('/handwritten-scan' as any)}
-        >
-          <Text style={styles.actionIcon}>✏️</Text>
-          <Text style={styles.actionText}>Handwritten</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionCard, { backgroundColor: '#EDE9FE' }]}
-          onPress={() => router.push('/questions-import' as any)}
-        >
-          <Text style={styles.actionIcon}>📥</Text>
-          <Text style={styles.actionText}>Import Q's</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionCard, { backgroundColor: '#FEF3C7' }]}
-          onPress={() => router.push('/results' as any)}
-        >
-          <Text style={styles.actionIcon}>📊</Text>
-          <Text style={styles.actionText}>Results</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionCard, { backgroundColor: '#FCE7F3' }]}
-          onPress={() => router.push('/auto-quiz' as any)}
-        >
-          <Text style={styles.actionIcon}>🎲</Text>
-          <Text style={styles.actionText}>Auto Quiz</Text>
-        </TouchableOpacity>
+        {GRID_ACTIONS.map((a) => (
+          <TouchableOpacity
+            key={a.route}
+            style={[styles.actionCard, { backgroundColor: a.bg, borderColor: a.border }]}
+            onPress={() => router.push(a.route as any)}
+          >
+            <Text style={styles.actionIcon}>{a.icon}</Text>
+            <Text style={styles.actionText}>{a.label}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
-      {/* ── Log out ───────────────────────────────────────────────────────── */}
+      {/* ── Auto Quiz — featured full-width card ────────────────────────────── */}
+      <TouchableOpacity
+        style={styles.featureCard}
+        onPress={() => router.push('/auto-quiz' as any)}
+      >
+        <View style={styles.featureLeft}>
+          <Text style={styles.featureIcon}>🎲</Text>
+        </View>
+        <View style={styles.featureBody}>
+          <Text style={styles.featureTitle}>Auto Quiz Generator</Text>
+          <Text style={styles.featureDesc}>
+            Instantly create Class 6–7 math quizzes — print &amp; scan to analyse student skills
+          </Text>
+        </View>
+        <Text style={styles.featureChevron}>›</Text>
+      </TouchableOpacity>
+
+      {/* ── Log out ─────────────────────────────────────────────────────────── */}
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutText}>Log out</Text>
       </TouchableOpacity>
@@ -195,11 +178,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 20,
     backgroundColor: '#F0FDF4',
-    gap: 16,
+    gap: 14,
     paddingBottom: 32,
   },
 
-  /* Hero card */
+  /* ── Hero ── */
   heroCard: {
     backgroundColor: '#1E3A8A',
     borderRadius: 20,
@@ -221,16 +204,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: { fontSize: 22, fontWeight: '800', color: '#1E3A8A' },
-  greetingLabel: { fontSize: 13, color: '#93C5FD', fontWeight: '500' },
+  greetingLabel: { fontSize: 12, color: '#93C5FD', fontWeight: '500' },
   greetingName: { fontSize: 17, color: '#ffffff', fontWeight: '700' },
-  classBadge: {
-    backgroundColor: '#A3E635',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-  },
-  classBadgeText: { fontSize: 12, fontWeight: '800', color: '#1E3A8A' },
-  emailText: { fontSize: 12, color: '#93C5FD' },
+  emailText: { fontSize: 11, color: '#93C5FD', marginTop: 2 },
   statRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -244,7 +220,7 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 11, color: '#CBD5E1', fontWeight: '600' },
   statDivider: { width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.15)' },
 
-  /* Quote carousel */
+  /* ── Quote carousel ── */
   quoteCard: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
@@ -257,62 +233,62 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 2,
     gap: 8,
-    minHeight: 140,
+    minHeight: 130,
   },
-  quoteIcon: {
-    fontSize: 40,
-    color: '#BEF264',
-    lineHeight: 36,
-    marginBottom: -8,
-    fontWeight: '900',
-  },
-  quoteText: {
-    fontSize: 14,
-    color: '#1E3A8A',
-    lineHeight: 22,
-    fontStyle: 'italic',
-  },
-  quoteAuthor: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '600',
-    marginTop: 4,
-  },
+  quoteIcon: { fontSize: 36, color: '#BEF264', lineHeight: 32, marginBottom: -6, fontWeight: '900' },
+  quoteText: { fontSize: 13, color: '#1E3A8A', lineHeight: 20, fontStyle: 'italic' },
+  quoteAuthor: { fontSize: 11, color: '#6B7280', fontWeight: '600', marginTop: 4 },
   dots: { flexDirection: 'row', gap: 6, marginTop: 4 },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#D1D5DB',
-  },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#D1D5DB' },
   dotActive: { backgroundColor: '#A3E635', width: 18 },
 
-  /* Quick actions grid */
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#6B7280',
-    marginBottom: -4,
-  },
-  actionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
+  /* ── 2×2 actions grid ── */
+  sectionLabel: { fontSize: 12, fontWeight: '700', color: '#6B7280', marginBottom: -6 },
+  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   actionCard: {
-    width: (SCREEN_WIDTH - 52) / 2,
-    borderRadius: 14,
-    paddingVertical: 18,
+    width: CARD_WIDTH,
+    borderRadius: 16,
+    paddingVertical: 20,
     alignItems: 'center',
     gap: 8,
+    borderWidth: 1.5,
   },
-  actionIcon: { fontSize: 26 },
+  actionIcon: { fontSize: 28 },
   actionText: { fontSize: 13, fontWeight: '700', color: '#1E3A8A' },
 
-  /* Logout */
+  /* ── Featured Auto Quiz card ── */
+  featureCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#F9A8D4',
+    gap: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  featureLeft: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#FCE7F3',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featureIcon: { fontSize: 26 },
+  featureBody: { flex: 1, gap: 3 },
+  featureTitle: { fontSize: 14, fontWeight: '700', color: '#1E3A8A' },
+  featureDesc: { fontSize: 11, color: '#6B7280', lineHeight: 16 },
+  featureChevron: { fontSize: 24, color: '#9CA3AF', fontWeight: '300' },
+
+  /* ── Logout ── */
   logoutButton: {
     alignSelf: 'center',
-    marginTop: 8,
+    marginTop: 4,
     paddingVertical: 10,
     paddingHorizontal: 28,
     backgroundColor: '#FEE2E2',
