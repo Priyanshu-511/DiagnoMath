@@ -9,6 +9,8 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/auth-context';
 
 const QUOTES = [
@@ -84,6 +86,7 @@ const GRID_ACTIONS = [
 
 export default function HomeScreen() {
   const { user, logout } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const handleLogout = async () => {
     await logout();
@@ -96,9 +99,20 @@ export default function HomeScreen() {
     hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   return (
-    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+    <>
+      <StatusBar style="dark" />
+      <ScrollView
+        contentContainerStyle={[
+          styles.container,
+          {
+            paddingTop: Math.max(insets.top + 16, 48),
+            paddingBottom: Math.max(insets.bottom + 24, 36),
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
 
-      {/* ── Hero card ───────────────────────────────────────────────────────── */}
+        {/* ── Hero card ───────────────────────────────────────────────────────── */}
       <View style={styles.heroCard}>
         <View style={styles.heroRow}>
           <View style={styles.avatarCircle}>
@@ -170,6 +184,7 @@ export default function HomeScreen() {
       </TouchableOpacity>
 
     </ScrollView>
+    </>
   );
 }
 

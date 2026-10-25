@@ -1,19 +1,34 @@
+import React from 'react';
 import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ExploreScreen() {
-  return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.heading}>Scan & Grade</Text>
-      <Text style={styles.subtitle}>
-        Choose how students submitted their answers.
-      </Text>
+  const insets = useSafeAreaInsets();
 
-      {/* ── OMR Bubble Scanner ─────────────────────────────────────────────── */}
-      <TouchableOpacity style={styles.card} onPress={() => router.push('/scan' as any)}>
-        <View style={styles.cardIcon}>
-          <Text style={styles.cardIconText}>⬛</Text>
-        </View>
+  return (
+    <>
+      <StatusBar style="dark" />
+      <ScrollView
+        contentContainerStyle={[
+          styles.container,
+          {
+            paddingTop: Math.max(insets.top + 16, 48),
+            paddingBottom: Math.max(insets.bottom + 24, 36),
+          },
+        ]}
+      >
+        <Text style={styles.heading}>Scan & Grade</Text>
+        <Text style={styles.subtitle}>
+          Choose how students submitted their answers.
+        </Text>
+
+        {/* ── OMR Bubble Scanner ─────────────────────────────────────────────── */}
+        <TouchableOpacity style={styles.card} onPress={() => router.push('/scan' as any)}>
+          <View style={styles.cardIcon}>
+            <Text style={styles.cardIconText}>📷</Text>
+          </View>
         <View style={styles.cardBody}>
           <Text style={styles.cardTitle}>OMR Bubble Sheet</Text>
           <Text style={styles.cardDesc}>
@@ -93,6 +108,7 @@ export default function ExploreScreen() {
         <Text style={styles.cardSmallText}>📊 View Results</Text>
       </TouchableOpacity>
     </ScrollView>
+    </>
   );
 }
 
