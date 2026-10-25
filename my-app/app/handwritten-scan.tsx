@@ -107,6 +107,7 @@ export default function HandwrittenScanScreen() {
           <TextInput
             style={styles.input}
             placeholder="Student name"
+            placeholderTextColor="#9CA3AF"
             value={studentName}
             onChangeText={setStudentName}
           />
@@ -176,13 +177,14 @@ const styles = StyleSheet.create({
   itemText: { fontSize: 14, color: '#1E3A8A' },
   testLabel: { fontSize: 16, fontWeight: '700', color: '#1E3A8A' },
   input: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#BEF264',
     backgroundColor: '#ffffff',
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 14,
     fontSize: 15,
+    color: '#111827',
   },
   error: { color: '#DC2626', fontSize: 13 },
   result: { marginTop: 12, gap: 6 },

@@ -101,6 +101,7 @@ export default function CreateTestScreen() {
         value={testName}
         onChangeText={setTestName}
         placeholder="e.g. Fractions Unit Test"
+        placeholderTextColor="#9CA3AF"
       />
 
       <Text style={styles.label}>Number of Questions (max {MAX_QUESTIONS_PER_SHEET})</Text>
@@ -109,6 +110,7 @@ export default function CreateTestScreen() {
         value={countText}
         onChangeText={setCountText}
         placeholder={`Default: all (up to ${MAX_QUESTIONS_PER_SHEET})`}
+        placeholderTextColor="#9CA3AF"
         keyboardType="number-pad"
       />
 
@@ -143,13 +145,14 @@ const styles = StyleSheet.create({
   optionItemSelected: { borderColor: '#3B82F6', borderWidth: 2 },
   optionText: { fontSize: 14, color: '#1E3A8A' },
   input: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#BEF264',
     backgroundColor: '#ffffff',
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 14,
     fontSize: 15,
+    color: '#111827',
     marginTop: 6,
   },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },

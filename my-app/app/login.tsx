@@ -94,6 +94,7 @@ export default function LoginScreen() {
         <TextInput
           style={styles.input}
           placeholder={mode === 'login' ? 'Username or Email' : 'Username'}
+          placeholderTextColor="#9CA3AF"
           autoCapitalize="none"
           autoCorrect={false}
           value={name}
@@ -108,6 +109,7 @@ export default function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="Email"
+            placeholderTextColor="#9CA3AF"
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
@@ -123,6 +125,7 @@ export default function LoginScreen() {
         <TextInput
           style={styles.input}
           placeholder="Password"
+          placeholderTextColor="#9CA3AF"
           secureTextEntry
           autoCapitalize="none"
           autoCorrect={false}
@@ -139,6 +142,7 @@ export default function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="Confirm Password"
+            placeholderTextColor="#9CA3AF"
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
@@ -192,13 +196,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   input: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#BEF264',
     backgroundColor: '#ffffff',
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
     fontSize: 16,
+    color: '#111827',
     marginBottom: 12,
   },
   error: {
