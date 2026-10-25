@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { pickAndParseQuestionFile } from '@/lib/questions/parseImport';
 import { saveBank } from '@/lib/questions/store';
 
 export default function ImportQuestionsScreen() {
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [summary, setSummary] = useState<null | { fileName: string; count: number; errors: string[] }>(
@@ -40,7 +42,16 @@ export default function ImportQuestionsScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.container,
+        {
+          paddingBottom: Math.max(insets.bottom + 24, 32),
+          paddingLeft: Math.max(insets.left, 24),
+          paddingRight: Math.max(insets.right, 24),
+        },
+      ]}
+    >
       <Text style={styles.heading}>Import Questions</Text>
       <Text style={styles.hint}>
         CSV or Excel with columns: topic, question, optionA, optionB, optionC, optionD, answer

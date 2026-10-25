@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScanResult } from '@/lib/results/types';
 import { listResults } from '@/lib/results/store';
 
 export default function ResultsScreen() {
+  const insets = useSafeAreaInsets();
   const [results, setResults] = useState<ScanResult[]>([]);
 
   useEffect(() => {
@@ -13,7 +15,16 @@ export default function ResultsScreen() {
   }, []);
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.container,
+        {
+          paddingBottom: Math.max(insets.bottom + 20, 28),
+          paddingLeft: Math.max(insets.left, 24),
+          paddingRight: Math.max(insets.right, 24),
+        },
+      ]}
+    >
       <Text style={styles.heading}>Results</Text>
 
       {results.length === 0 ? (

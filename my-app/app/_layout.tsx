@@ -2,6 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider, Stack, useRouter, useSegments }
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -43,21 +44,31 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
-    <AuthProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <AuthGate>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="login" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-            <Stack.Screen
-              name="handwritten-scan"
-              options={{ title: 'Handwritten Answers', headerShown: true }}
-            />
-          </Stack>
-        </AuthGate>
-        <StatusBar style="auto" />
-      </ThemeProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <AuthGate>
+            <Stack
+              screenOptions={{
+                headerStyle: { backgroundColor: '#F0FDF4' },
+                headerTintColor: '#1E3A8A',
+                headerTitleStyle: { fontWeight: '700' },
+                headerShadowVisible: false,
+                contentStyle: { backgroundColor: '#F0FDF4' },
+              }}
+            >
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="login" options={{ headerShown: false }} />
+              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+              <Stack.Screen
+                name="handwritten-scan"
+                options={{ title: 'Handwritten Answers', headerShown: true }}
+              />
+            </Stack>
+          </AuthGate>
+          <StatusBar style="auto" />
+        </ThemeProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

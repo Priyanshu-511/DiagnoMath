@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import BubbleScanner from '@/components/omr/BubbleScanner';
 import { Diagnosis, analyzeScan } from '@/lib/diagnosis/analyze';
@@ -13,6 +14,7 @@ import { listTests } from '@/lib/tests/store';
 type ScanMode = 'camera' | 'gallery' | null;
 
 export default function ScanScreen() {
+  const insets = useSafeAreaInsets();
   const [tests, setTests] = useState<TestTemplate[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [scanMode, setScanMode] = useState<ScanMode>(null);
@@ -78,7 +80,16 @@ export default function ScanScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.container,
+        {
+          paddingBottom: Math.max(insets.bottom + 24, 32),
+          paddingLeft: Math.max(insets.left, 24),
+          paddingRight: Math.max(insets.right, 24),
+        },
+      ]}
+    >
       <Text style={styles.heading}>Scan Answer Sheet</Text>
 
       {!selected ? (

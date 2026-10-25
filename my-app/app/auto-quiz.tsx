@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
@@ -22,6 +23,7 @@ import { QuestionBank } from '@/lib/questions/types';
 const QUESTION_COUNTS = [5, 10, 15, 20];
 
 export default function AutoQuizScreen() {
+  const insets = useSafeAreaInsets();
   const [questionCount, setQuestionCount] = useState(10);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
 
@@ -124,7 +126,16 @@ export default function AutoQuizScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.container,
+        {
+          paddingBottom: Math.max(insets.bottom + 24, 40),
+          paddingLeft: Math.max(insets.left, 24),
+          paddingRight: Math.max(insets.right, 24),
+        },
+      ]}
+    >
       <Text style={styles.heading}>🎲 Auto Quiz Generator</Text>
       <Text style={styles.subtitle}>Class 6–7 Mathematics</Text>
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MAX_QUESTIONS_PER_SHEET } from '@/lib/omr/layout';
 import { QuestionBank } from '@/lib/questions/types';
@@ -8,6 +9,7 @@ import { listBanks } from '@/lib/questions/store';
 import { saveTest } from '@/lib/tests/store';
 
 export default function CreateTestScreen() {
+  const insets = useSafeAreaInsets();
   const [banks, setBanks] = useState<QuestionBank[]>([]);
   const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
   const [testName, setTestName] = useState('');
@@ -64,7 +66,16 @@ export default function CreateTestScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.container,
+        {
+          paddingBottom: Math.max(insets.bottom + 24, 32),
+          paddingLeft: Math.max(insets.left, 24),
+          paddingRight: Math.max(insets.right, 24),
+        },
+      ]}
+    >
       <Text style={styles.heading}>Create Test</Text>
 
       <Text style={styles.label}>Question Bank</Text>

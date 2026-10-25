@@ -14,8 +14,10 @@ export default function ExploreScreen() {
         contentContainerStyle={[
           styles.container,
           {
-            paddingTop: Math.max(insets.top + 16, 48),
-            paddingBottom: Math.max(insets.bottom + 24, 36),
+            paddingTop: insets.top > 0 ? insets.top + 12 : 18,
+            paddingBottom: insets.bottom > 0 ? insets.bottom + 20 : 28,
+            paddingLeft: Math.max(insets.left, 24),
+            paddingRight: Math.max(insets.right, 24),
           },
         ]}
       >

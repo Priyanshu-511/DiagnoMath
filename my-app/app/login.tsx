@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts/auth-context';
 import { AuthError } from '@/lib/auth/types';
@@ -17,6 +18,7 @@ type Mode = 'login' | 'signup';
 
 export default function LoginScreen() {
   const { login, register } = useAuth();
+  const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<Mode>('login');
 
   const [name, setName] = useState('');
@@ -70,7 +72,18 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[
+          styles.scroll,
+          {
+            paddingTop: insets.top > 0 ? insets.top + 20 : 24,
+            paddingBottom: insets.bottom > 0 ? insets.bottom + 20 : 24,
+            paddingLeft: Math.max(insets.left, 24),
+            paddingRight: Math.max(insets.right, 24),
+          },
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.title}>{mode === 'login' ? 'Teacher Login' : 'Teacher Sign Up'}</Text>
         <Text style={styles.subtitle}>
           {mode === 'login'

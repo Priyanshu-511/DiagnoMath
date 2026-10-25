@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HandwrittenScanner from '@/components/handwritten/HandwrittenScanner';
 import { Diagnosis, analyzeScan } from '@/lib/diagnosis/analyze';
@@ -11,6 +12,7 @@ import { TestTemplate } from '@/lib/tests/types';
 import { listTests } from '@/lib/tests/store';
 
 export default function HandwrittenScanScreen() {
+  const insets = useSafeAreaInsets();
   const [tests, setTests] = useState<TestTemplate[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [studentName, setStudentName] = useState('');
@@ -66,7 +68,16 @@ export default function HandwrittenScanScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.container,
+        {
+          paddingBottom: Math.max(insets.bottom + 24, 32),
+          paddingLeft: Math.max(insets.left, 24),
+          paddingRight: Math.max(insets.right, 24),
+        },
+      ]}
+    >
       <Text style={styles.heading}>✏️ Handwritten Answers</Text>
       <Text style={styles.subtitle}>
         For students who wrote answers as a numbered list (e.g. 1. a  2. b  3. c)

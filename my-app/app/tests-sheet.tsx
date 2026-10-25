@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
@@ -9,6 +10,7 @@ import { TestTemplate } from '@/lib/tests/types';
 import { listTests } from '@/lib/tests/store';
 
 export default function TestsSheetScreen() {
+  const insets = useSafeAreaInsets();
   const [tests, setTests] = useState<TestTemplate[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busy, setBusy] = useState<'answer' | 'paper' | null>(null);
@@ -42,7 +44,16 @@ export default function TestsSheetScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.container,
+        {
+          paddingBottom: Math.max(insets.bottom + 24, 32),
+          paddingLeft: Math.max(insets.left, 24),
+          paddingRight: Math.max(insets.right, 24),
+        },
+      ]}
+    >
       <Text style={styles.heading}>Print / Share Test Sheets</Text>
 
       {tests.length === 0 ? (

@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScanResult } from '@/lib/results/types';
 import { getResult } from '@/lib/results/store';
 
 export default function ResultDetailScreen() {
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [result, setResult] = useState<ScanResult | null>(null);
 
@@ -18,7 +20,16 @@ export default function ResultDetailScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.container,
+        {
+          paddingBottom: Math.max(insets.bottom + 24, 32),
+          paddingLeft: Math.max(insets.left, 24),
+          paddingRight: Math.max(insets.right, 24),
+        },
+      ]}
+    >
       <Text style={styles.heading}>{result.studentName}</Text>
       <Text style={styles.sub}>
         {result.testName} · {new Date(result.scannedAt).toLocaleDateString()}
