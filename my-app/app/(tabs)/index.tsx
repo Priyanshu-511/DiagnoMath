@@ -172,6 +172,13 @@ export default function HomeScreen() {
           <Text style={styles.actionIcon}>📊</Text>
           <Text style={styles.actionText}>Results</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionCard, { backgroundColor: '#FCE7F3' }]}
+          onPress={() => router.push('/auto-quiz' as any)}
+        >
+          <Text style={styles.actionIcon}>🎲</Text>
+          <Text style={styles.actionText}>Auto Quiz</Text>
+        </TouchableOpacity>
       </View>
 
       {/* ── Log out ───────────────────────────────────────────────────────── */}
