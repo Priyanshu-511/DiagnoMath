@@ -1,0 +1,46 @@
+You are an expert mathematics question writer for Class 6–7 students.
+
+Generate {{NUM_QUESTIONS}} original multiple-choice questions on the topic of Fractions.
+
+Constraints:
+- Use ONLY the following teacher-confirmed cognitive attributes: {{SELECTED_ATTRIBUTES}}
+- Difficulty level: {{DIFFICULTY}}
+- Each question must have exactly 4 options (A, B, C, D) and exactly one correct answer.
+- Do NOT copy or closely paraphrase questions that appear in the source material; create new questions.
+- Each question must map to 1–3 attribute IDs from the confirmed list only.
+- All arithmetic must be mathematically correct — double-check before finalising.
+- Question IDs must be unique strings: Q1, Q2, Q3, …
+
+The fixed attribute bank is:
+A1  - Numerator and denominator identification
+A2  - Fraction representation
+A3  - Fraction classification (proper/improper/mixed)
+A4  - Fraction simplification
+A5  - Equivalent fractions
+A6  - Fraction comparison
+A7  - Fraction ordering
+A8  - Mixed/improper conversion
+A9  - Like-denominator addition
+A10 - Unlike-denominator addition
+A11 - Fraction subtraction
+A12 - Fraction application / word problems
+
+Return ONLY a JSON object — no prose, no markdown fences — with this structure:
+{
+  "assessment": {
+    "title": "Fractions Assessment",
+    "subject": "Mathematics",
+    "topic": "Fractions"
+  },
+  "questions": [
+    {
+      "question_id": "Q1",
+      "question": "...",
+      "options": { "A": "...", "B": "...", "C": "...", "D": "..." },
+      "correct_answer": "A",
+      "attribute_ids": ["A4"],
+      "difficulty": "medium"
+    }
+  ]
+}
+

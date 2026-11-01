@@ -1,0 +1,17 @@
+{
+  "name": "diagnomath-qmatrix",
+  "version": "1.0.0",
+  "description": "Q-Matrix module for DiagnoMath cognitive diagnosis pipeline",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test tests/qmatrix.test.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
+

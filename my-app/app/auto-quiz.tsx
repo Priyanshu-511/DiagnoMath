@@ -14,6 +14,7 @@ import * as Sharing from 'expo-sharing';
 
 import { Question } from '@/lib/questions/types';
 import { generateQuiz, ALL_TOPICS } from '@/lib/quiz/generate';
+import { generateMixedQuiz, ALL_TOPICS_OFFLINE, describeMix } from '@/lib/quiz/generate-mixed';
 import { saveBank } from '@/lib/questions/store';
 import { saveTest } from '@/lib/tests/store';
 import { generateQuestionPaperHtml, generateAnswerSheetHtml } from '@/lib/omr/sheetHtml';
@@ -26,6 +27,7 @@ export default function AutoQuizScreen() {
   const insets = useSafeAreaInsets();
   const [questionCount, setQuestionCount] = useState(10);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [mixedMode, setMixedMode] = useState(true);
 
   const [questions, setQuestions] = useState<Question[] | null>(null);
   const [savedTest, setSavedTest] = useState<{ test: TestTemplate; bank: QuestionBank } | null>(null);
@@ -43,7 +45,9 @@ export default function AutoQuizScreen() {
   const handleGenerate = () => {
     setError('');
     setSavedTest(null);
-    const qs = generateQuiz({ count: questionCount, topics: selectedTopics });
+    const qs = mixedMode
+      ? generateMixedQuiz({ count: questionCount, topics: selectedTopics, mixedConceptsMode: true })
+      : generateQuiz({ count: questionCount, topics: selectedTopics });
     if (qs.length === 0) {
       setError('No questions available for the selected topics. Try selecting more topics.');
       return;
@@ -123,6 +127,7 @@ export default function AutoQuizScreen() {
     setQuestions(null);
     setSavedTest(null);
     setError('');
+    setMixedMode(true);
   };
 
   return (
@@ -137,7 +142,28 @@ export default function AutoQuizScreen() {
       ]}
     >
       <Text style={styles.heading}>🎲 Auto Quiz Generator</Text>
-      <Text style={styles.subtitle}>Class 6–7 Mathematics</Text>
+      <Text style={styles.subtitle}>Class 6–7 Mathematics · 100% Offline</Text>
+
+      {/* ── Mixed-concept mode toggle ───────────────────────────────── */}
+      <TouchableOpacity
+        style={[styles.modeToggle, mixedMode && styles.modeToggleActive]}
+        onPress={() => { setMixedMode((v) => !v); setQuestions(null); setSavedTest(null); }}
+      >
+        <Text style={[styles.modeToggleIcon]}>{mixedMode ? '🔀' : '📋'}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.modeToggleTitle, mixedMode && styles.modeToggleTitleActive]}>
+            {mixedMode ? 'Mixed Concepts ON' : 'Mixed Concepts OFF'}
+          </Text>
+          <Text style={styles.modeToggleDesc}>
+            {mixedMode
+              ? 'Blends cross-topic questions + balanced topic coverage'
+              : 'Standard random selection from selected topics'}
+          </Text>
+        </View>
+        <View style={[styles.modeTogglePill, mixedMode && styles.modeTogglePillActive]}>
+          <Text style={styles.modeTogglePillText}>{mixedMode ? 'ON' : 'OFF'}</Text>
+        </View>
+      </TouchableOpacity>
 
       {/* ── Step 1: Configure ──────────────────────────────────────── */}
       <Text style={styles.sectionLabel}>Number of questions</Text>
@@ -158,7 +184,7 @@ export default function AutoQuizScreen() {
         <Text style={styles.sectionHint}>(none selected = all topics mixed)</Text>
       </Text>
       <View style={styles.chipRow}>
-        {ALL_TOPICS.map((t) => (
+        {ALL_TOPICS_OFFLINE.map((t) => (
           <TouchableOpacity
             key={t}
             style={[styles.chip, selectedTopics.includes(t) && styles.chipActive]}
@@ -184,8 +210,9 @@ export default function AutoQuizScreen() {
             ✅ {questions.length} questions generated
           </Text>
           <Text style={styles.generatedDesc}>
-            Topics covered:{' '}
-            {Array.from(new Set(questions.map((q) => q.topic))).join(', ')}
+            {mixedMode
+              ? describeMix(questions)
+              : `Topics: ${Array.from(new Set(questions.map((q) => q.topic))).join(', ')}`}
           </Text>
           <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
             {saving ? (
@@ -263,6 +290,31 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, color: '#4B5563', marginTop: -4, marginBottom: 4 },
   sectionLabel: { fontSize: 13, fontWeight: '700', color: '#1E3A8A', marginTop: 4 },
   sectionHint: { fontWeight: '400', color: '#6B7280' },
+
+  /* ── Mixed-concept toggle ── */
+  modeToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    padding: 14,
+  },
+  modeToggleActive: { backgroundColor: '#F0FDF4', borderColor: '#86EFAC' },
+  modeToggleIcon: { fontSize: 22 },
+  modeToggleTitle: { fontSize: 13, fontWeight: '700', color: '#6B7280' },
+  modeToggleTitleActive: { color: '#166534' },
+  modeToggleDesc: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
+  modeTogglePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#E5E7EB',
+  },
+  modeTogglePillActive: { backgroundColor: '#BBF7D0' },
+  modeTogglePillText: { fontSize: 11, fontWeight: '700', color: '#374151' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 14,

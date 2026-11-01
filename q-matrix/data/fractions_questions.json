@@ -1,0 +1,106 @@
+{
+  "assessment": {
+    "title": "Fractions Assessment",
+    "subject": "Mathematics",
+    "topic": "Fractions"
+  },
+  "questions": [
+    {
+      "question_id": "Q1",
+      "question": "In the fraction 3/8, which number is the numerator?",
+      "options": { "A": "3", "B": "8", "C": "38", "D": "11" },
+      "correct_answer": "A",
+      "attribute_ids": ["A1"],
+      "difficulty": "easy"
+    },
+    {
+      "question_id": "Q2",
+      "question": "Which of the following correctly represents three-fifths as a fraction?",
+      "options": { "A": "5/3", "B": "3/5", "C": "35", "D": "0.35" },
+      "correct_answer": "B",
+      "attribute_ids": ["A2"],
+      "difficulty": "easy"
+    },
+    {
+      "question_id": "Q3",
+      "question": "Which of the following is an improper fraction?",
+      "options": { "A": "2/5", "B": "1/3", "C": "7/4", "D": "3/8" },
+      "correct_answer": "C",
+      "attribute_ids": ["A3"],
+      "difficulty": "easy"
+    },
+    {
+      "question_id": "Q4",
+      "question": "Simplify 12/18.",
+      "options": { "A": "2/3", "B": "3/4", "C": "4/5", "D": "6/9" },
+      "correct_answer": "A",
+      "attribute_ids": ["A4"],
+      "difficulty": "medium"
+    },
+    {
+      "question_id": "Q5",
+      "question": "Which fraction is equivalent to 2/3?",
+      "options": { "A": "3/4", "B": "4/5", "C": "6/9", "D": "5/8" },
+      "correct_answer": "C",
+      "attribute_ids": ["A5"],
+      "difficulty": "medium"
+    },
+    {
+      "question_id": "Q6",
+      "question": "Which fraction is greater: 3/4 or 5/8?",
+      "options": { "A": "5/8", "B": "3/4", "C": "They are equal", "D": "Cannot compare" },
+      "correct_answer": "B",
+      "attribute_ids": ["A6"],
+      "difficulty": "medium"
+    },
+    {
+      "question_id": "Q7",
+      "question": "Arrange in ascending order: 1/2, 3/8, 5/6",
+      "options": { "A": "3/8 < 1/2 < 5/6", "B": "1/2 < 3/8 < 5/6", "C": "5/6 < 1/2 < 3/8", "D": "3/8 < 5/6 < 1/2" },
+      "correct_answer": "A",
+      "attribute_ids": ["A7"],
+      "difficulty": "medium"
+    },
+    {
+      "question_id": "Q8",
+      "question": "Convert 2 3/4 to an improper fraction.",
+      "options": { "A": "9/4", "B": "11/4", "C": "8/4", "D": "10/4" },
+      "correct_answer": "B",
+      "attribute_ids": ["A8"],
+      "difficulty": "medium"
+    },
+    {
+      "question_id": "Q9",
+      "question": "What is 3/7 + 2/7?",
+      "options": { "A": "5/14", "B": "5/7", "C": "6/7", "D": "1/7" },
+      "correct_answer": "B",
+      "attribute_ids": ["A9"],
+      "difficulty": "easy"
+    },
+    {
+      "question_id": "Q10",
+      "question": "What is 1/2 + 1/3?",
+      "options": { "A": "2/5", "B": "2/6", "C": "5/6", "D": "3/5" },
+      "correct_answer": "C",
+      "attribute_ids": ["A10"],
+      "difficulty": "medium"
+    },
+    {
+      "question_id": "Q11",
+      "question": "What is 5/6 − 1/6?",
+      "options": { "A": "4/0", "B": "6/6", "C": "4/6", "D": "2/3" },
+      "correct_answer": "D",
+      "attribute_ids": ["A11", "A4"],
+      "difficulty": "medium"
+    },
+    {
+      "question_id": "Q12",
+      "question": "Ravi ate 3/8 of a pizza and Meena ate 2/8 of the same pizza. What fraction of the pizza did they eat together?",
+      "options": { "A": "5/16", "B": "5/8", "C": "1/2", "D": "6/8" },
+      "correct_answer": "B",
+      "attribute_ids": ["A12", "A9"],
+      "difficulty": "hard"
+    }
+  ]
+}
+

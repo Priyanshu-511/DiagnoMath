@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { pickAndParseQuestionFile } from '@/lib/questions/parseImport';
 import { saveBank } from '@/lib/questions/store';
+import { enrichQuestionsWithBertTiny } from '@/lib/qmatrix';
 
 export default function ImportQuestionsScreen() {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [summary, setSummary] = useState<null | { fileName: string; count: number; errors: string[] }>(
-    null
-  );
+  const [summary, setSummary] = useState<null | {
+    fileName: string;
+    count: number;
+    errors: string[];
+    taggedCount: number;
+  }>(null);
 
   const handleImport = async () => {
     setError('');
@@ -26,14 +30,17 @@ export default function ImportQuestionsScreen() {
         return;
       }
 
+      // Auto-tag questions with cognitive skills using offline prajjwal1/bert-tiny
+      const { enriched, taggedCount } = enrichQuestionsWithBertTiny(questions);
+
       await saveBank({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         name: fileName,
         importedAt: new Date().toISOString(),
-        questions,
+        questions: enriched,
       });
 
-      setSummary({ fileName, count: questions.length, errors });
+      setSummary({ fileName, count: enriched.length, errors, taggedCount });
     } catch (err: any) {
       setError(err?.message ?? 'Import failed');
     } finally {
@@ -70,6 +77,13 @@ export default function ImportQuestionsScreen() {
         <>
           <Text style={styles.summaryTitle}>Imported "{summary.fileName}"</Text>
           <Text style={styles.summaryText}>{summary.count} questions saved</Text>
+          {summary.taggedCount > 0 && (
+            <View style={styles.bertBadge}>
+              <Text style={styles.bertBadgeText}>
+                ⚡ prajjwal1/bert-tiny auto-tagged {summary.taggedCount} questions with A1–A12 cognitive skills for DINA diagnosis
+              </Text>
+            </View>
+          )}
           {summary.errors.length > 0 && (
             <>
               <Text style={styles.warn}>{summary.errors.length} row(s) skipped:</Text>
@@ -106,4 +120,18 @@ const styles = StyleSheet.create({
   summaryText: { fontSize: 14, color: '#166534' },
   warn: { fontSize: 13, color: '#B45309', marginTop: 8, fontWeight: '600' },
   warnItem: { fontSize: 12, color: '#B45309' },
+  bertBadge: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#93C5FD',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 6,
+  },
+  bertBadgeText: {
+    fontSize: 12,
+    color: '#1E3A8A',
+    fontWeight: '600',
+    lineHeight: 16,
+  },
 });

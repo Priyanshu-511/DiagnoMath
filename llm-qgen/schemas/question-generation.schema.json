@@ -1,0 +1,59 @@
+{
+  "type": "object",
+  "properties": {
+    "assessment": {
+      "type": "object",
+      "properties": {
+        "title":   { "type": "string" },
+        "subject": { "type": "string" },
+        "topic":   { "type": "string" }
+      },
+      "required": ["title", "subject", "topic"],
+      "additionalProperties": false
+    },
+    "questions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "question_id": { "type": "string" },
+          "question":    { "type": "string" },
+          "options": {
+            "type": "object",
+            "properties": {
+              "A": { "type": "string" },
+              "B": { "type": "string" },
+              "C": { "type": "string" },
+              "D": { "type": "string" }
+            },
+            "required": ["A", "B", "C", "D"],
+            "additionalProperties": false
+          },
+          "correct_answer": {
+            "type": "string",
+            "enum": ["A", "B", "C", "D"]
+          },
+          "attribute_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "items": {
+              "type": "string",
+              "enum": ["A1","A2","A3","A4","A5","A6","A7","A8","A9","A10","A11","A12"]
+            }
+          },
+          "difficulty": {
+            "type": "string",
+            "enum": ["easy", "medium", "hard"]
+          }
+        },
+        "required": ["question_id","question","options","correct_answer","attribute_ids","difficulty"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["assessment", "questions"],
+  "additionalProperties": false
+}
+
