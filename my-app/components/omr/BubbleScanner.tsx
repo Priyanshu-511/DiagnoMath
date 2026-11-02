@@ -13,6 +13,7 @@ import { WebView } from 'react-native-webview';
 
 import { BUBBLE_RADIUS, PAGE_HEIGHT, PAGE_WIDTH, getBubbleLayout } from '@/lib/omr/layout';
 import { buildScannerHtml } from '@/lib/omr/scannerHtml';
+import { scanWithOmrTransformer, IS_REMOTE_AI_ENABLED } from '@/lib/scanner/aiScannerService';
 import { DetectedAnswer } from '@/lib/omr/types';
 
 interface Props {
@@ -32,6 +33,7 @@ function optionLabel(opt: 0 | 1 | 2 | 3 | null): string {
 export default function BubbleScanner({ questionCount, onScanned, onError, initialMode }: Props) {
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [activeEngine, setActiveEngine] = useState<string>('Auto (Flova Transformer / Local)');
   const [answers, setAnswers] = useState<DetectedAnswer[] | null>(null);
 
   /** Cycle through A → B → C → D → blank for a given question */
@@ -73,6 +75,20 @@ export default function BubbleScanner({ questionCount, onScanned, onError, initi
 
       setProcessing(true);
       const asset = result.assets[0];
+
+      if (IS_REMOTE_AI_ENABLED) {
+        try {
+          const hfOmrRes = await scanWithOmrTransformer(asset.uri, questionCount);
+          setAnswers(hfOmrRes.answers);
+          setActiveEngine(hfOmrRes.model);
+          setProcessing(false);
+          return;
+        } catch {
+          // Fallback to local auto-centering canvas OMR engine
+        }
+      }
+
+      // Fast, 100% offline on-device OMR with auto-centering & shadow removal
       const manipulated = await ImageManipulator.manipulateAsync(
         asset.uri,
         [{ resize: { width: PAGE_WIDTH, height: PAGE_HEIGHT } }],
@@ -80,6 +96,7 @@ export default function BubbleScanner({ questionCount, onScanned, onError, initi
       );
 
       if (!manipulated.base64) throw new Error('Could not read the captured image');
+      setActiveEngine('On-device Auto-Centering OMR (100% Offline)');
       setImageBase64(manipulated.base64);
     } catch (err: any) {
       setProcessing(false);
@@ -136,6 +153,10 @@ export default function BubbleScanner({ questionCount, onScanned, onError, initi
 
     return (
       <View style={styles.container}>
+        <View style={styles.modelPill}>
+          <Text style={styles.modelPillText}>🤖 Model: {activeEngine}</Text>
+        </View>
+
         <Text style={styles.hint}>
           Scanned bubbles shown below. Tap any question to change or confirm the bubble before grading.
         </Text>
@@ -235,6 +256,20 @@ export default function BubbleScanner({ questionCount, onScanned, onError, initi
 
 const styles = StyleSheet.create({
   container: { gap: 12, marginVertical: 12 },
+  modelPill: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    alignSelf: 'flex-start',
+  },
+  modelPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1E40AF',
+  },
   hint: { fontSize: 12, color: '#4B5563' },
   warn: { fontSize: 12, color: '#B45309', backgroundColor: '#FEF9C3', padding: 8, borderRadius: 8 },
 
