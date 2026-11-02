@@ -140,6 +140,11 @@ export default function HandwrittenScanner({
                   {optionLabel(a.selectedOption)}
                 </Text>
               </View>
+              {typeof a.confidence === 'number' && (
+                <View style={styles.confidencePill}>
+                  <Text style={styles.confidenceText}>{a.confidence}%</Text>
+                </View>
+              )}
               {a.flag !== 'ok' && (
                 <Text style={styles.flagLabel}>
                   {a.flag === 'blank' ? '⚠ blank' : '⚠ unclear'}
@@ -259,6 +264,19 @@ const styles = StyleSheet.create({
   badgeFilled: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
   badgeText: { fontSize: 14, fontWeight: '700', color: '#9CA3AF' },
   badgeTextFilled: { color: '#fff' },
+  confidencePill: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+    borderWidth: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  confidenceText: {
+    fontSize: 11,
+    color: '#065F46',
+    fontWeight: '700',
+  },
   flagLabel: { fontSize: 11, color: '#B45309', marginLeft: 4 },
 
   // Raw OCR debug

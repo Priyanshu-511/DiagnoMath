@@ -3,4 +3,6 @@ export interface DetectedAnswer {
   selectedOption: 0 | 1 | 2 | 3 | null;
   /** 'ok' = one clear mark, 'blank' = no mark detected, 'multiple' = more than one mark — flag for manual check */
   flag: 'ok' | 'blank' | 'multiple';
+  /** Probability / confidence percentage (0-100) of the selected option */
+  confidence?: number;
 }

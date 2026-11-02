@@ -245,16 +245,51 @@ export function parseAnswerText(
   for (let i = 0; i < questionCount; i++) {
     const hits = hitsPerQuestion.get(i)!;
     if (hits.length === 0) {
-      answers[i] = { questionIndex: i, selectedOption: null, flag: 'blank' };
+      // Loose fallback search for this specific question number
+      const qNum = i + 1;
+      const looseRegex = new RegExp(
+        `(?:^|\\b|q)${qNum}\\s*[:.\\-)\\s=]+([a-dA-D048^@oO(\\{\\[\\]]|[^\\s,;|\\n\\r]+)`,
+        'i'
+      );
+      const looseMatch = normalized.match(looseRegex);
+      let recovered = false;
+      if (looseMatch) {
+        const tok = looseMatch[1].trim();
+        const optLetter = tokenToOption(tok);
+        if (optLetter !== null) {
+          answers[i] = { questionIndex: i, selectedOption: optLetter, flag: 'ok', confidence: 80 };
+          recovered = true;
+        } else if (expectedOptionsByQuestion && expectedOptionsByQuestion[i]) {
+          const valOpt = matchWrittenValueToOption(tok, expectedOptionsByQuestion[i]);
+          if (valOpt !== null) {
+            answers[i] = { questionIndex: i, selectedOption: valOpt, flag: 'ok', confidence: 80 };
+            recovered = true;
+          }
+        }
+      }
+      if (!recovered) {
+        answers[i] = { questionIndex: i, selectedOption: null, flag: 'blank' };
+      }
     } else if (hits.length === 1) {
-      answers[i] = { questionIndex: i, selectedOption: hits[0], flag: 'ok' };
+      answers[i] = { questionIndex: i, selectedOption: hits[0], flag: 'ok', confidence: 95 };
     } else {
       // Check if all hits for this question agree on the same letter
       const allSame = hits.every((h) => h === hits[0]);
       if (allSame) {
-        answers[i] = { questionIndex: i, selectedOption: hits[0], flag: 'ok' };
+        answers[i] = { questionIndex: i, selectedOption: hits[0], flag: 'ok', confidence: 90 };
       } else {
-        answers[i] = { questionIndex: i, selectedOption: null, flag: 'multiple' };
+        // Vote among candidates to select the most probable option
+        const voteCounts = [0, 0, 0, 0];
+        hits.forEach((h) => voteCounts[h]++);
+        let maxVotes = 0;
+        let bestOpt: 0 | 1 | 2 | 3 = hits[0];
+        for (let c = 0; c < 4; c++) {
+          if (voteCounts[c] > maxVotes) {
+            maxVotes = voteCounts[c];
+            bestOpt = c as 0 | 1 | 2 | 3;
+          }
+        }
+        answers[i] = { questionIndex: i, selectedOption: bestOpt, flag: 'multiple', confidence: 60 };
       }
     }
   }

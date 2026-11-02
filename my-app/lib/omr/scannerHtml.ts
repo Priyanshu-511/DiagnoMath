@@ -281,34 +281,55 @@ export function buildScannerHtml({
         });
       });
 
-      // ── Step 4: Classify Each Question Row ──
-      var MIN_FILL_THRESHOLD = 0.28; // Clean separation threshold
-      var AMBIGUOUS_MARGIN = 0.12;   // Multi-mark detection margin
-
+      // ── Step 4: Softmax Probability Distribution & Selection ──
+      // Evaluates relative fill probabilities among the 4 options (A, B, C, D)
+      // and selects whichever option has the highest probability.
       var results = Object.keys(byQuestion).map(function (qi) {
-        var opts = byQuestion[qi].slice().sort(function (a, b) {
-          return b.fillRatio - a.fillRatio; // Darkest fill first
+        var opts = byQuestion[qi].slice();
+
+        // Find max fill for numerical stability in softmax
+        var maxFill = -Infinity;
+        for (var i = 0; i < opts.length; i++) {
+          if (opts[i].fillRatio > maxFill) maxFill = opts[i].fillRatio;
+        }
+
+        // Temperature factor: beta = 12.0 gives clear separation for faint marks
+        var BETA = 12.0;
+        var expSum = 0;
+        for (var j = 0; j < opts.length; j++) {
+          var e = Math.exp(BETA * (opts[j].fillRatio - maxFill));
+          opts[j].expScore = e;
+          expSum += e;
+        }
+
+        for (var k = 0; k < opts.length; k++) {
+          opts[k].probability = expSum > 0 ? opts[k].expScore / expSum : 0.25;
+        }
+
+        // Sort descending: option with highest probability first
+        opts.sort(function (a, b) {
+          return b.probability - a.probability;
         });
 
         var top = opts[0];
-        var runnerUp = opts[1];
+        var runnerUp = opts[1] || opts[0];
 
-        var selectedOption = null;
-        var flag = 'blank';
+        // Always choose the option with higher probability from the 4 options
+        var selectedOption = top.optionIndex;
+        var flag = 'ok';
 
-        if (top.fillRatio >= MIN_FILL_THRESHOLD) {
-          if (runnerUp.fillRatio >= MIN_FILL_THRESHOLD && (top.fillRatio - runnerUp.fillRatio) < AMBIGUOUS_MARGIN) {
-            flag = 'multiple';
-          } else {
-            selectedOption = top.optionIndex;
-            flag = 'ok';
-          }
+        // Check for ambiguous multiple marks: if top two are heavily filled and close
+        if (top.fillRatio >= 0.22 && runnerUp.fillRatio >= 0.20 && Math.abs(top.fillRatio - runnerUp.fillRatio) < 0.10) {
+          flag = 'multiple';
         }
+
+        var confidencePct = Math.round(top.probability * 100);
 
         return {
           questionIndex: parseInt(qi, 10),
           selectedOption: selectedOption,
-          flag: flag
+          flag: flag,
+          confidence: confidencePct
         };
       });
 
