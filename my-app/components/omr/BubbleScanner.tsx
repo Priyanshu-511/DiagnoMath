@@ -1,5 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
@@ -16,9 +23,29 @@ interface Props {
   initialMode?: 'camera' | 'gallery';
 }
 
+const OPTION_LABELS = ['A', 'B', 'C', 'D'];
+
+function optionLabel(opt: 0 | 1 | 2 | 3 | null): string {
+  return opt !== null ? OPTION_LABELS[opt] : '—';
+}
+
 export default function BubbleScanner({ questionCount, onScanned, onError, initialMode }: Props) {
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [answers, setAnswers] = useState<DetectedAnswer[] | null>(null);
+
+  /** Cycle through A → B → C → D → blank for a given question */
+  const cycleOption = (qIdx: number) => {
+    if (!answers) return;
+    setAnswers((prev) =>
+      (prev ?? []).map((a) => {
+        if (a.questionIndex !== qIdx) return a;
+        const next = a.selectedOption === null ? 0 : (a.selectedOption + 1) % 5;
+        const opt = next === 4 ? null : (next as 0 | 1 | 2 | 3);
+        return { ...a, selectedOption: opt, flag: 'ok' };
+      })
+    );
+  };
 
   const capture = async (fromCamera: boolean) => {
     try {
@@ -74,10 +101,21 @@ export default function BubbleScanner({ questionCount, onScanned, onError, initi
       if (!Array.isArray(parsed)) {
         throw new Error(parsed?.error || 'Scan failed');
       }
-      onScanned(parsed as DetectedAnswer[]);
+      setAnswers(parsed as DetectedAnswer[]);
     } catch (err: any) {
       onError(err?.message ?? 'Could not read the scan results — try again with better lighting');
     }
+  };
+
+  const handleConfirm = () => {
+    if (answers) {
+      onScanned(answers);
+    }
+  };
+
+  const handleRetake = () => {
+    setAnswers(null);
+    setImageBase64(null);
   };
 
   const positions = getBubbleLayout(questionCount);
@@ -91,16 +129,81 @@ export default function BubbleScanner({ questionCount, onScanned, onError, initi
       })
     : null;
 
+  // ── Preview / edit table state ──
+  if (answers) {
+    const blanks = answers.filter((a) => a.flag === 'blank').length;
+    const multiples = answers.filter((a) => a.flag === 'multiple').length;
+
+    return (
+      <View style={styles.container}>
+        <Text style={styles.hint}>
+          Scanned bubbles shown below. Tap any question to change or confirm the bubble before grading.
+        </Text>
+
+        {(blanks > 0 || multiples > 0) && (
+          <Text style={styles.warn}>
+            {blanks > 0 ? `${blanks} blank` : ''}
+            {blanks > 0 && multiples > 0 ? ', ' : ''}
+            {multiples > 0 ? `${multiples} unclear/multiple` : ''} — verify before saving.
+          </Text>
+        )}
+
+        <ScrollView style={styles.tableScroll} nestedScrollEnabled>
+          {answers.map((a) => (
+            <TouchableOpacity
+              key={a.questionIndex}
+              style={[
+                styles.row,
+                a.flag === 'blank' && styles.rowBlank,
+                a.flag === 'multiple' && styles.rowMultiple,
+              ]}
+              onPress={() => cycleOption(a.questionIndex)}
+            >
+              <Text style={styles.qNum}>Q{a.questionIndex + 1}</Text>
+              <View
+                style={[
+                  styles.badge,
+                  a.selectedOption !== null && styles.badgeFilled,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.badgeText,
+                    a.selectedOption !== null && styles.badgeTextFilled,
+                  ]}
+                >
+                  {optionLabel(a.selectedOption)}
+                </Text>
+              </View>
+              {a.flag !== 'ok' && (
+                <Text style={styles.flagLabel}>
+                  {a.flag === 'blank' ? '⚠ blank' : '⚠ unclear'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        <View style={styles.row2}>
+          <TouchableOpacity style={styles.buttonAlt} onPress={handleRetake}>
+            <Text style={styles.buttonTextAlt}>↩ Retake</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.button} onPress={handleConfirm}>
+            <Text style={styles.buttonText}>✓ Confirm & Grade</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.hint}>
-        Crop tightly to the sheet's edges in the next screen, in good even light, so the bubbles
-        line up with where the app expects them.
+        Align the sheet inside the camera frame in good even lighting.
       </Text>
 
-      {/* Fallback manual pickers (shown only if auto-trigger didn't open or user wants to retry) */}
       {!imageBase64 && !processing && (
-        <View style={styles.row}>
+        <View style={styles.row2}>
           <TouchableOpacity style={styles.button} onPress={() => capture(true)} disabled={processing}>
             <Text style={styles.buttonText}>📷 Capture Sheet</Text>
           </TouchableOpacity>
@@ -113,7 +216,7 @@ export default function BubbleScanner({ questionCount, onScanned, onError, initi
       {processing && (
         <View style={styles.processing}>
           <ActivityIndicator color="#3B82F6" />
-          <Text style={styles.processingText}>Reading bubbles…</Text>
+          <Text style={styles.processingText}>Reading bubbles with auto-centering…</Text>
         </View>
       )}
 
@@ -133,7 +236,9 @@ export default function BubbleScanner({ questionCount, onScanned, onError, initi
 const styles = StyleSheet.create({
   container: { gap: 12, marginVertical: 12 },
   hint: { fontSize: 12, color: '#4B5563' },
-  row: { flexDirection: 'row', gap: 10 },
+  warn: { fontSize: 12, color: '#B45309', backgroundColor: '#FEF9C3', padding: 8, borderRadius: 8 },
+
+  row2: { flexDirection: 'row', gap: 10 },
   button: {
     flex: 1,
     backgroundColor: '#3B82F6',
@@ -153,4 +258,35 @@ const styles = StyleSheet.create({
   processing: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
   processingText: { color: '#4B5563', fontSize: 13 },
   hiddenWebView: { position: 'absolute', width: 1, height: 1, opacity: 0 },
+
+  // Preview table
+  tableScroll: { maxHeight: 320 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 4,
+    gap: 10,
+  },
+  rowBlank: { borderColor: '#FCD34D', backgroundColor: '#FFFBEB' },
+  rowMultiple: { borderColor: '#FCA5A5', backgroundColor: '#FFF1F2' },
+  qNum: { width: 36, fontSize: 13, color: '#6B7280', fontWeight: '600' },
+  badge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeFilled: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
+  badgeText: { fontSize: 14, fontWeight: '700', color: '#9CA3AF' },
+  badgeTextFilled: { color: '#fff' },
+  flagLabel: { fontSize: 11, color: '#B45309', marginLeft: 4 },
 });

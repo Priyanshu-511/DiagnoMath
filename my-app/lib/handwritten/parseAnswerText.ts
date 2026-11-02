@@ -1,107 +1,176 @@
 import { DetectedAnswer } from '@/lib/omr/types';
 
 /**
- * Normalize a single OCR character that is commonly misread.
- *   8 → b (round shapes), ( → c (open curve), 0 → o (ambiguous)
+ * Character mapping for OCR handwriting misreads.
+ * Recovers letters A, B, C, D from digits, curved symbols, and common OCR artifacts.
  */
-function normalizeOcrChar(ch: string): string {
-  switch (ch) {
-    case '8': return 'b';
-    case '(': return 'c';
-    case '{': return 'c';
-    default:  return ch;
-  }
-}
+const OCR_CHAR_MAP: Record<string, 0 | 1 | 2 | 3> = {
+  // A variants
+  a: 0,
+  '4': 0, // '4' resembles handwritten 'A'
+  '^': 0,
+  '@': 0,
+  '/\\': 0,
+  h: 0,
+  r: 0,
+
+  // B variants
+  b: 1,
+  '8': 1, // '8' resembles handwritten 'B'
+  '13': 1, // '13' resembles 'B'
+  '|3': 1,
+  '6': 1, // often read when lower loop of 'b' is heavy
+
+  // C variants
+  c: 2,
+  '(': 2,
+  '{': 2,
+  '<': 2,
+  '[': 2,
+  g: 2,
+
+  // D variants
+  d: 3,
+  '0': 3, // '0' resembles handwritten 'D'
+  '|)': 3,
+  ']': 3,
+  o: 3,
+  q: 3,
+};
 
 /**
  * Maps a single character token to a 0-based option index (A=0 … D=3).
- * Handles both clean input and common OCR misreads.
  */
-function letterToOption(raw: string): 0 | 1 | 2 | 3 | null {
-  const ch = normalizeOcrChar(raw.trim().toLowerCase());
-  switch (ch) {
-    case 'a': return 0;
-    case 'b': return 1;
-    case 'c': return 2;
-    case 'd': return 3;
-    default:  return null;
+function tokenToOption(raw: string): 0 | 1 | 2 | 3 | null {
+  const clean = raw.trim().toLowerCase();
+  if (OCR_CHAR_MAP[clean] !== undefined) {
+    return OCR_CHAR_MAP[clean];
   }
+  return null;
 }
 
 /**
- * Parse raw OCR text produced by reading a handwritten answer sheet.
+ * Comprehensive parser for raw OCR handwriting text.
  *
- * Accepted formats:
- *   1. a   2. b   3. c   4. d       (inline, any separator)
- *   1. a                             (one per line)
- *   2) B   3:c   4-D   5 a          (flexible separators)
- *   a, b, c, d                      (bare sequential letters)
+ * Handles:
+ *   1. Standard numbered formats:
+ *      - 1. A, 1) B, 1: C, 1- D, 1= A, 1 A
+ *      - Q1. A, Q1: B, Q1 A, Ans 1: C, No. 1 A
+ *   2. Bracketed answers:
+ *      - 1. (A), 2. (B), 3. [C], 4. {D}
+ *   3. Two-column & multi-column layouts:
+ *      - 1. A   6. B
+ *        2. B   7. C
+ *   4. Inline lists:
+ *      - 1.a, 2.b, 3.c, 4.d
+ *   5. Bare sequential letter lists:
+ *      - A, B, C, D, A, B...
+ *   6. Robust OCR misread tolerance:
+ *      - 8 → B, 4 → A, ( → C, 0 → D
  *
- * OCR misread tolerance:
- *   8 → B, ( → C, case-insensitive
- *
- * @param rawText      Full text string returned by ML Kit (or typed manually).
- * @param questionCount Number of questions expected on the sheet.
- * @returns            One DetectedAnswer per question (0-based questionIndex).
+ * @param rawText Full text from on-device ML Kit text recognition
+ * @param questionCount Number of questions on the test
+ * @returns Array of DetectedAnswer objects
  */
 export function parseAnswerText(
   rawText: string,
   questionCount: number,
 ): DetectedAnswer[] {
-  // Initialise all answers as blank
   const answers: DetectedAnswer[] = Array.from({ length: questionCount }, (_, i) => ({
     questionIndex: i,
     selectedOption: null,
     flag: 'blank' as const,
   }));
 
-  // Clean the OCR text: collapse whitespace, strip noise characters
-  const text = rawText
-    .replace(/[\u2010-\u2015\u2212]/g, '-')   // normalize unicode dashes
-    .replace(/[^\S\n]+/g, ' ')                // collapse horizontal whitespace
-    .replace(/[|\\[\]{}]/g, '')               // strip noise characters
-    .trim();
+  if (!rawText || !rawText.trim()) return answers;
 
-  if (!text) return answers;
+  // Track occurrences per question (to detect multiple / conflicting answers)
+  const hitsPerQuestion = new Map<number, (0 | 1 | 2 | 3)[]>();
+  for (let i = 0; i < questionCount; i++) {
+    hitsPerQuestion.set(i, []);
+  }
 
-  // Track hits per question (to detect duplicates → 'multiple')
-  const hitCount = new Array<number>(questionCount).fill(0);
+  // Pre-clean: strip brackets wrapping single answer tokens e.g. (A) -> A, [B] -> B
+  const normalized = rawText
+    .replace(/[\u2010-\u2015\u2212]/g, '-') // normalize unicode dashes
+    .replace(/[\(\[\{]\s*([a-dA-D048^@oO])\s*[\)\]\}]/g, ' $1 ') // unwrap (A) -> A
+    .replace(/\r/g, '\n');
 
-  // ── Strategy 1: explicit "number + separator + letter" patterns ──────
-  //    Matches: 1. a | 2) B | 3:C | 4-d | 5 a | 10.D | 1.8(→1.B,C)
-  const explicitRe = /(\d{1,2})\s*[.):\-\s]\s*([a-dA-D08(])/g;
-  let m: RegExpExecArray | null;
+  // ── Strategy 1: Explicit numbered pattern ──────────────────────────────────
+  // Matches: "1. A", "Q1: B", "Ans 1 - C", "1) D", "1 A", "No 1: B"
+  const explicitPattern = /(?:q(?:uestion)?|ans(?:wer)?|no\.?)?\s*(\d{1,2})\s*[\.\)\:\-\=\s]+\s*([a-dA-D048^@oO(\{\<\]])/gi;
 
-  while ((m = explicitRe.exec(text)) !== null) {
-    const qNum = parseInt(m[1], 10);
+  let match: RegExpExecArray | null;
+  while ((match = explicitPattern.exec(normalized)) !== null) {
+    const qNum = parseInt(match[1], 10);
     const qIdx = qNum - 1;
-    if (qIdx < 0 || qIdx >= questionCount) continue;
 
-    const option = letterToOption(m[2]);
-    if (option === null) continue;
-
-    hitCount[qIdx]++;
-    if (hitCount[qIdx] === 1) {
-      answers[qIdx] = { questionIndex: qIdx, selectedOption: option, flag: 'ok' };
-    } else {
-      answers[qIdx] = { questionIndex: qIdx, selectedOption: null, flag: 'multiple' };
+    if (qIdx >= 0 && qIdx < questionCount) {
+      const opt = tokenToOption(match[2]);
+      if (opt !== null) {
+        hitsPerQuestion.get(qIdx)!.push(opt);
+      }
     }
   }
 
-  // ── Strategy 2: bare sequential letters (no numbers) ────────────────
-  //    Only used when Strategy 1 found nothing at all.
-  const hasAnyExplicit = hitCount.some((c) => c > 0);
-  if (!hasAnyExplicit) {
-    const tokens = text
-      .split(/[\n\r,\s]+/)
-      .map((t) => t.trim())
-      .filter((t) => /^[a-dA-D08(]$/.test(t));
+  // ── Strategy 2: Line-by-line columnar fallback ────────────────────────────
+  // Some OCR layouts split numbers and letters onto adjacent lines
+  const lines = normalized.split('\n').map((l) => l.trim()).filter(Boolean);
+  for (let i = 0; i < lines.length - 1; i++) {
+    const lineNumMatch = lines[i].match(/^(?:q)?(\d{1,2})[\.\)\:]?$/i);
+    if (lineNumMatch) {
+      const qNum = parseInt(lineNumMatch[1], 10);
+      const qIdx = qNum - 1;
+      if (qIdx >= 0 && qIdx < questionCount && hitsPerQuestion.get(qIdx)!.length === 0) {
+        const nextToken = lines[i + 1].trim();
+        const opt = tokenToOption(nextToken);
+        if (opt !== null) {
+          hitsPerQuestion.get(qIdx)!.push(opt);
+        }
+      }
+    }
+  }
 
-    tokens.slice(0, questionCount).forEach((token, idx) => {
-      const option = letterToOption(token);
-      if (option === null) return;
-      answers[idx] = { questionIndex: idx, selectedOption: option, flag: 'ok' };
+  // ── Strategy 3: Bare letter sequences (when no numbers are present) ────────
+  let hasAnyHits = false;
+  for (let i = 0; i < questionCount; i++) {
+    if (hitsPerQuestion.get(i)!.length > 0) {
+      hasAnyHits = true;
+      break;
+    }
+  }
+
+  if (!hasAnyHits) {
+    // Student just wrote "A B C D B A C D..."
+    const tokens = normalized
+      .split(/[\s,;|]+/)
+      .map((t) => t.trim())
+      .filter((t) => t.length === 1 && tokenToOption(t) !== null);
+
+    tokens.slice(0, questionCount).forEach((tok, idx) => {
+      const opt = tokenToOption(tok);
+      if (opt !== null) {
+        hitsPerQuestion.get(idx)!.push(opt);
+      }
     });
+  }
+
+  // ── Build final DetectedAnswer array ───────────────────────────────────────
+  for (let i = 0; i < questionCount; i++) {
+    const hits = hitsPerQuestion.get(i)!;
+    if (hits.length === 0) {
+      answers[i] = { questionIndex: i, selectedOption: null, flag: 'blank' };
+    } else if (hits.length === 1) {
+      answers[i] = { questionIndex: i, selectedOption: hits[0], flag: 'ok' };
+    } else {
+      // Check if all hits for this question agree on the same letter
+      const allSame = hits.every((h) => h === hits[0]);
+      if (allSame) {
+        answers[i] = { questionIndex: i, selectedOption: hits[0], flag: 'ok' };
+      } else {
+        answers[i] = { questionIndex: i, selectedOption: null, flag: 'multiple' };
+      }
+    }
   }
 
   return answers;
