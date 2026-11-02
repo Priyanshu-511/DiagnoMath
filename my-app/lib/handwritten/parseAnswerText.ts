@@ -19,7 +19,8 @@ const OCR_CHAR_MAP: Record<string, 0 | 1 | 2 | 3> = {
   '8': 1, // '8' resembles handwritten 'B'
   '13': 1, // '13' resembles 'B'
   '|3': 1,
-  '6': 1, // often read when lower loop of 'b' is heavy
+  '6': 1, // lower loop of 'b'
+  ß: 1,
 
   // C variants
   c: 2,
@@ -42,10 +43,69 @@ const OCR_CHAR_MAP: Record<string, 0 | 1 | 2 | 3> = {
  * Maps a single character token to a 0-based option index (A=0 … D=3).
  */
 function tokenToOption(raw: string): 0 | 1 | 2 | 3 | null {
-  const clean = raw.trim().toLowerCase();
+  const clean = raw.trim().toLowerCase().replace(/[.,;:!]+$/, '');
   if (OCR_CHAR_MAP[clean] !== undefined) {
     return OCR_CHAR_MAP[clean];
   }
+  return null;
+}
+
+/**
+ * Normalizes text for comparison by keeping only alphanumeric and slash/dot characters.
+ */
+function cleanNorm(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9/.]/g, '');
+}
+
+/**
+ * Matches written text (e.g. "2/3", "Proper fraction", "0.75") against the expected
+ * options of a specific question.
+ */
+function matchWrittenValueToOption(written: string, options: string[]): 0 | 1 | 2 | 3 | null {
+  if (!options || options.length === 0) return null;
+
+  const normW = cleanNorm(written);
+  if (!normW) return null;
+
+  // 1. Exact normalized match (e.g. '2/3' === '2/3', 'proper' === 'proper')
+  for (let idx = 0; idx < options.length && idx < 4; idx++) {
+    if (normW === cleanNorm(options[idx])) {
+      return idx as 0 | 1 | 2 | 3;
+    }
+  }
+
+  // 2. Word-level token match (e.g. written "Proper" matches "Proper fraction")
+  const writtenWords = written.toLowerCase().match(/[a-z0-9/.]+/g);
+  if (!writtenWords || writtenWords.length === 0) return null;
+
+  const scores = [0, 0, 0, 0];
+  for (let idx = 0; idx < options.length && idx < 4; idx++) {
+    const optWords = new Set(options[idx].toLowerCase().match(/[a-z0-9/.]+/g) || []);
+    for (const w of writtenWords) {
+      if (optWords.has(w)) {
+        scores[idx]++;
+      }
+    }
+  }
+
+  let maxScore = 0;
+  let bestIdx: number | null = null;
+  let isTie = false;
+
+  for (let i = 0; i < scores.length; i++) {
+    if (scores[i] > maxScore) {
+      maxScore = scores[i];
+      bestIdx = i;
+      isTie = false;
+    } else if (scores[i] > 0 && scores[i] === maxScore) {
+      isTie = true;
+    }
+  }
+
+  if (maxScore > 0 && !isTie && bestIdx !== null) {
+    return bestIdx as 0 | 1 | 2 | 3;
+  }
+
   return null;
 }
 
@@ -58,23 +118,27 @@ function tokenToOption(raw: string): 0 | 1 | 2 | 3 | null {
  *      - Q1. A, Q1: B, Q1 A, Ans 1: C, No. 1 A
  *   2. Bracketed answers:
  *      - 1. (A), 2. (B), 3. [C], 4. {D}
- *   3. Two-column & multi-column layouts:
+ *   3. Option text value matching:
+ *      - 1. 2/3, 2. Proper fraction, 3. 0.75
+ *   4. Two-column & multi-column layouts:
  *      - 1. A   6. B
  *        2. B   7. C
- *   4. Inline lists:
+ *   5. Inline lists & line-by-line number-letter splits:
  *      - 1.a, 2.b, 3.c, 4.d
- *   5. Bare sequential letter lists:
+ *   6. Bare sequential letter lists:
  *      - A, B, C, D, A, B...
- *   6. Robust OCR misread tolerance:
+ *   7. Robust OCR misread tolerance:
  *      - 8 → B, 4 → A, ( → C, 0 → D
  *
  * @param rawText Full text from on-device ML Kit text recognition
  * @param questionCount Number of questions on the test
+ * @param expectedOptionsByQuestion Optional array of option strings per question for value matching
  * @returns Array of DetectedAnswer objects
  */
 export function parseAnswerText(
   rawText: string,
   questionCount: number,
+  expectedOptionsByQuestion?: string[][],
 ): DetectedAnswer[] {
   const answers: DetectedAnswer[] = Array.from({ length: questionCount }, (_, i) => ({
     questionIndex: i,
@@ -97,8 +161,10 @@ export function parseAnswerText(
     .replace(/\r/g, '\n');
 
   // ── Strategy 1: Explicit numbered pattern ──────────────────────────────────
-  // Matches: "1. A", "Q1: B", "Ans 1 - C", "1) D", "1 A", "No 1: B"
-  const explicitPattern = /(?:q(?:uestion)?|ans(?:wer)?|no\.?)?\s*(\d{1,2})\s*[\.\)\:\-\=\s]+\s*([a-dA-D048^@oO(\{\<\]])/gi;
+  // Matches: "1. A", "Q1: B", "Ans 1 - C", "1) D", "1 A", "No 1: B", "1. 2/3", "1. Proper"
+  // Lookahead enables parsing two-column / multi-column lines without skipping secondary columns
+  const explicitPattern =
+    /(?:(?:q(?:uestion)?|ans(?:wer)?|no\.?)\s*)?(\d{1,2})\s*[\.\)\:\-\=\s]+([a-zA-Z0-9^@/\(\[\{][^\n\r,;|\t]*?)(?=(?:\s{2,}|\s*(?:q(?:uestion)?|ans(?:wer)?|no\.?)?\d{1,2}[\.\)\:\-\=]|$))/gi;
 
   let match: RegExpExecArray | null;
   while ((match = explicitPattern.exec(normalized)) !== null) {
@@ -106,16 +172,31 @@ export function parseAnswerText(
     const qIdx = qNum - 1;
 
     if (qIdx >= 0 && qIdx < questionCount) {
-      const opt = tokenToOption(match[2]);
-      if (opt !== null) {
-        hitsPerQuestion.get(qIdx)!.push(opt);
+      const rest = match[2].trim();
+      if (!rest) continue;
+
+      // 1. Check if first token is a single option letter
+      const firstTok = rest.split(/\s+/)[0];
+      const optFromLetter = tokenToOption(firstTok);
+      if (optFromLetter !== null) {
+        hitsPerQuestion.get(qIdx)!.push(optFromLetter);
+      } else if (expectedOptionsByQuestion && expectedOptionsByQuestion[qIdx]) {
+        // 2. Check if the written string matches an option value (e.g. "2/3" or "Proper")
+        const optFromValue = matchWrittenValueToOption(rest, expectedOptionsByQuestion[qIdx]);
+        if (optFromValue !== null) {
+          hitsPerQuestion.get(qIdx)!.push(optFromValue);
+        }
       }
     }
   }
 
   // ── Strategy 2: Line-by-line columnar fallback ────────────────────────────
-  // Some OCR layouts split numbers and letters onto adjacent lines
-  const lines = normalized.split('\n').map((l) => l.trim()).filter(Boolean);
+  // Some OCR layouts split numbers and answers onto adjacent lines
+  const lines = normalized
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
   for (let i = 0; i < lines.length - 1; i++) {
     const lineNumMatch = lines[i].match(/^(?:q)?(\d{1,2})[\.\)\:]?$/i);
     if (lineNumMatch) {
@@ -123,9 +204,14 @@ export function parseAnswerText(
       const qIdx = qNum - 1;
       if (qIdx >= 0 && qIdx < questionCount && hitsPerQuestion.get(qIdx)!.length === 0) {
         const nextToken = lines[i + 1].trim();
-        const opt = tokenToOption(nextToken);
-        if (opt !== null) {
-          hitsPerQuestion.get(qIdx)!.push(opt);
+        const optFromLetter = tokenToOption(nextToken.split(/\s+/)[0]);
+        if (optFromLetter !== null) {
+          hitsPerQuestion.get(qIdx)!.push(optFromLetter);
+        } else if (expectedOptionsByQuestion && expectedOptionsByQuestion[qIdx]) {
+          const optFromValue = matchWrittenValueToOption(nextToken, expectedOptionsByQuestion[qIdx]);
+          if (optFromValue !== null) {
+            hitsPerQuestion.get(qIdx)!.push(optFromValue);
+          }
         }
       }
     }

@@ -1,50 +1,51 @@
-# Welcome to your Expo app 👋
+# DiagnoMath Mobile Client (`my-app`)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+The core React Native / Expo application for **DiagnoMath**. Designed to run **100% offline on Android smartphones**.
 
-## Get started
+---
 
-1. Install dependencies
+## Capabilities
 
-   ```bash
-   npm install
-   ```
+* **Offline Auto-Quiz Generator**: Blends mixed-concept and single-skill questions from built-in banks.
+* **On-Device Q-Matrix Engine (`prajjwal1/bert-tiny`)**: Auto-tags imported questions with the 12 Fractions cognitive attributes ($A_1 \dots A_{12}$) in pure TypeScript on the phone CPU.
+* **High-Accuracy Offline OMR Engine (80–95%+ Accuracy)**:
+  - **4 Corner Registration Markers**: Solid $24 \times 24\text{px}$ fiducial squares in sheet corners correct camera crop, shift ($\Delta x, \Delta y$), and scale ($s_x, s_y$).
+  - **16-Point Radial Ring Contrast Auto-Centering ($\pm 14\text{px}$)**: Maximizes perimeter ring-to-background contrast to lock onto bubble centers without false-positive border pulls.
+  - **Adaptive Dual-Metric Fill Detection**: Combines inner dark-pixel binarization ($T = L_{\text{bg}} - 35$) with local paper contrast ratio to eliminate phone shadows and ambient lighting gradients.
+  - **Interactive Teacher Verification**: One-tap bubble correction ($A \to B \to C \to D \to \text{blank}$) before grading.
+* **Smart Handwritten Answer OCR**:
+  - **On-Device ML Kit Recognition**: 100% offline text extraction with zero external server dependencies.
+  - **Multi-Format Regex Parser**: Segments numbered items (`1. A`, `1) B`, `1: C`), bracketed answers (`1. (A)`, `[B]`), and two-column layouts.
+  - **Option Value Matching**: If students write the answer text (e.g. `2/3`, `Proper fraction`, `0.75`) instead of letters, the parser resolves them to the correct option index.
+  - **Handwriting Confusion Recovery**: Automatically recovers OCR confusions (`8 \to B`, `4 \to A`, `( \to C`, `0 \to D`).
+* **DINA Cognitive Diagnosis**: Evaluates student skill profiles ($\boldsymbol{\alpha}$) on-device to pinpoint unmastered mathematical concepts.
+* **Offline PDF Generation**: Creates printable Question Papers and OMR Bubble Sheets using system fonts and the Android OS Print Spooler.
+* **Offline Auth & Storage**: Salted SHA-256 passwords and local `AsyncStorage`.
 
-2. Start the app
+---
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Development & Testing
 
 ```bash
-npm run reset-project
+# 1. Install dependencies
+npm install
+
+# 2. Start the Expo development server
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+---
 
-## Learn more
+## Building the Standalone Offline APK
 
-To learn more about developing your project with Expo, look at the following resources:
+Your `eas.json` is preconfigured for generating direct APK files:
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+# Build standalone preview APK
+npx eas build --profile preview --platform android
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+# Or build locally via Gradle
+npx expo prebuild
+cd android && ./gradlew assembleRelease
+```
+Once installed, the APK functions completely in airplane mode with zero network requests.

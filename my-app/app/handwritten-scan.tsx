@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HandwrittenScanner from '@/components/handwritten/HandwrittenScanner';
 import { Diagnosis, analyzeScan } from '@/lib/diagnosis/analyze';
 import { DetectedAnswer } from '@/lib/omr/types';
+import { QuestionBank } from '@/lib/questions/types';
 import { getBank } from '@/lib/questions/store';
 import { saveResult } from '@/lib/results/store';
 import { TestTemplate } from '@/lib/tests/types';
@@ -16,6 +17,7 @@ export default function HandwrittenScanScreen() {
   const [tests, setTests] = useState<TestTemplate[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [studentName, setStudentName] = useState('');
+  const [currentBank, setCurrentBank] = useState<QuestionBank | null>(null);
   const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -25,6 +27,21 @@ export default function HandwrittenScanScreen() {
   }, []);
 
   const selected = tests.find((t) => t.id === selectedId) ?? null;
+
+  useEffect(() => {
+    if (selected) {
+      getBank(selected.bankId).then((b) => setCurrentBank(b ?? null));
+    } else {
+      setCurrentBank(null);
+    }
+  }, [selected]);
+
+  const expectedOptionsByQuestion = selected && currentBank
+    ? selected.questionIds.map((qid) => {
+        const q = currentBank.questions.find((item) => item.id === qid);
+        return q ? q.options : [];
+      })
+    : undefined;
 
   const handleScanned = async (detected: DetectedAnswer[]) => {
     if (!selected) return;
@@ -115,6 +132,7 @@ export default function HandwrittenScanScreen() {
           {!diagnosis && (
             <HandwrittenScanner
               questionCount={selected.questionIds.length}
+              expectedOptionsByQuestion={expectedOptionsByQuestion}
               onScanned={handleScanned}
               onError={setError}
             />

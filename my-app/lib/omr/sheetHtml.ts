@@ -3,6 +3,8 @@ import { TestTemplate } from '@/lib/tests/types';
 
 import {
   BUBBLE_RADIUS,
+  CORNER_MARKER_MARGIN,
+  CORNER_MARKER_SIZE,
   LABEL_X,
   OPTION_LETTERS,
   OPTION_X,
@@ -27,7 +29,7 @@ export function generateAnswerSheetHtml(test: TestTemplate): string {
     const y = getRowY(i, count);
     const bubbles = OPTION_X.map(
       (x, optIdx) => `
-      <div style="position:absolute;left:${x - BUBBLE_RADIUS}px;top:${y - BUBBLE_RADIUS}px;width:${BUBBLE_RADIUS * 2}px;height:${BUBBLE_RADIUS * 2}px;border:2px solid #000;border-radius:50%;text-align:center;line-height:${BUBBLE_RADIUS * 2}px;font-size:11px;font-family:Arial;">${OPTION_LETTERS[optIdx]}</div>`
+      <div style="position:absolute;left:${x - BUBBLE_RADIUS}px;top:${y - BUBBLE_RADIUS}px;width:${BUBBLE_RADIUS * 2}px;height:${BUBBLE_RADIUS * 2}px;border:2px solid #000;border-radius:50%;text-align:center;line-height:${BUBBLE_RADIUS * 2}px;font-size:11px;font-family:Arial;color:#777;">${OPTION_LETTERS[optIdx]}</div>`
     ).join('');
     const label = `<div style="position:absolute;left:${LABEL_X}px;top:${y - 10}px;font-size:14px;font-family:Arial;font-weight:bold;">Q${i + 1}</div>`;
     return label + bubbles;
@@ -39,6 +41,12 @@ export function generateAnswerSheetHtml(test: TestTemplate): string {
 </head>
 <body>
   <div style="position:relative;width:${PAGE_WIDTH}px;height:${PAGE_HEIGHT}px;font-family:Arial;">
+    <!-- Corner registration markers for robust camera alignment -->
+    <div style="position:absolute;left:${CORNER_MARKER_MARGIN}px;top:${CORNER_MARKER_MARGIN}px;width:${CORNER_MARKER_SIZE}px;height:${CORNER_MARKER_SIZE}px;background:#000;"></div>
+    <div style="position:absolute;left:${PAGE_WIDTH - CORNER_MARKER_MARGIN - CORNER_MARKER_SIZE}px;top:${CORNER_MARKER_MARGIN}px;width:${CORNER_MARKER_SIZE}px;height:${CORNER_MARKER_SIZE}px;background:#000;"></div>
+    <div style="position:absolute;left:${CORNER_MARKER_MARGIN}px;top:${PAGE_HEIGHT - CORNER_MARKER_MARGIN - CORNER_MARKER_SIZE}px;width:${CORNER_MARKER_SIZE}px;height:${CORNER_MARKER_SIZE}px;background:#000;"></div>
+    <div style="position:absolute;left:${PAGE_WIDTH - CORNER_MARKER_MARGIN - CORNER_MARKER_SIZE}px;top:${PAGE_HEIGHT - CORNER_MARKER_MARGIN - CORNER_MARKER_SIZE}px;width:${CORNER_MARKER_SIZE}px;height:${CORNER_MARKER_SIZE}px;background:#000;"></div>
+
     <div style="position:absolute;top:30px;left:60px;right:60px;">
       <div style="font-size:20px;font-weight:bold;">${escapeHtml(test.name)} — Answer Sheet</div>
       <div style="margin-top:16px;font-size:13px;">Student Name: ____________________________&nbsp;&nbsp;&nbsp; Date: ______________</div>

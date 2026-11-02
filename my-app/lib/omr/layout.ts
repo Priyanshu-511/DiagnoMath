@@ -12,6 +12,16 @@ export const MAX_QUESTIONS_PER_SHEET = 30; // keeps everything on one page — s
 export const BUBBLE_RADIUS = 12;
 export const OPTION_LETTERS = ['A', 'B', 'C', 'D'] as const;
 
+export const CORNER_MARKER_SIZE = 24;
+export const CORNER_MARKER_MARGIN = 24;
+/** Center coordinates of the 4 registration markers */
+export const CORNER_MARKERS = {
+  topLeft: { x: CORNER_MARKER_MARGIN + CORNER_MARKER_SIZE / 2, y: CORNER_MARKER_MARGIN + CORNER_MARKER_SIZE / 2 },
+  topRight: { x: PAGE_WIDTH - CORNER_MARKER_MARGIN - CORNER_MARKER_SIZE / 2, y: CORNER_MARKER_MARGIN + CORNER_MARKER_SIZE / 2 },
+  bottomLeft: { x: CORNER_MARKER_MARGIN + CORNER_MARKER_SIZE / 2, y: PAGE_HEIGHT - CORNER_MARKER_MARGIN - CORNER_MARKER_SIZE / 2 },
+  bottomRight: { x: PAGE_WIDTH - CORNER_MARKER_MARGIN - CORNER_MARKER_SIZE / 2, y: PAGE_HEIGHT - CORNER_MARKER_MARGIN - CORNER_MARKER_SIZE / 2 },
+};
+
 const MARGIN_TOP = 170;
 const MARGIN_BOTTOM = 70;
 

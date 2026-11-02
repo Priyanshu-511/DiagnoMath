@@ -11,11 +11,11 @@ import * as ImagePicker from 'expo-image-picker';
 import TextRecognition from '@react-native-ml-kit/text-recognition';
 
 import { parseAnswerText } from '@/lib/handwritten/parseAnswerText';
-import { scanWithGraniteDocling, IS_REMOTE_AI_ENABLED } from '@/lib/scanner/aiScannerService';
 import { DetectedAnswer } from '@/lib/omr/types';
 
 interface Props {
   questionCount: number;
+  expectedOptionsByQuestion?: string[][];
   onScanned: (detected: DetectedAnswer[]) => void;
   onError: (message: string) => void;
 }
@@ -27,9 +27,13 @@ function optionLabel(opt: 0 | 1 | 2 | 3 | null): string {
   return opt !== null ? OPTION_LABELS[opt] : '—';
 }
 
-export default function HandwrittenScanner({ questionCount, onScanned, onError }: Props) {
+export default function HandwrittenScanner({
+  questionCount,
+  expectedOptionsByQuestion,
+  onScanned,
+  onError,
+}: Props) {
   const [processing, setProcessing] = useState(false);
-  const [activeEngine, setActiveEngine] = useState<string>('Auto (Granite / ML Kit)');
   const [rawText, setRawText] = useState<string | null>(null);
   const [showRaw, setShowRaw] = useState(false);
   const [answers, setAnswers] = useState<DetectedAnswer[] | null>(null);
@@ -66,31 +70,12 @@ export default function HandwrittenScanner({ questionCount, onScanned, onError }
       setProcessing(true);
       const uri = result.assets[0].uri;
 
-      let parsedAnswers: DetectedAnswer[] | null = null;
-      let text = '';
-      let usedModel = 'On-device Fast OCR (100% Offline)';
-
-      if (IS_REMOTE_AI_ENABLED) {
-        try {
-          const graniteRes = await scanWithGraniteDocling(uri, questionCount);
-          parsedAnswers = graniteRes.answers;
-          text = graniteRes.rawText;
-          usedModel = graniteRes.model;
-        } catch {
-          // Fallback to on-device ML Kit
-          const recognition = await TextRecognition.recognize(uri);
-          text = recognition.text ?? '';
-          parsedAnswers = parseAnswerText(text, questionCount);
-        }
-      } else {
-        // Fast, 100% offline on-device OCR
-        const recognition = await TextRecognition.recognize(uri);
-        text = recognition.text ?? '';
-        parsedAnswers = parseAnswerText(text, questionCount);
-      }
-
+      // On-device ML Kit OCR — 100% offline & instant
+      const recognition = await TextRecognition.recognize(uri);
+      const text = recognition.text ?? '';
       setRawText(text);
-      setActiveEngine(usedModel);
+
+      const parsedAnswers = parseAnswerText(text, questionCount, expectedOptionsByQuestion);
       setAnswers(parsedAnswers);
     } catch (err: any) {
       onError(err?.message ?? 'Could not recognise the handwritten answers');
@@ -116,10 +101,6 @@ export default function HandwrittenScanner({ questionCount, onScanned, onError }
 
     return (
       <View style={styles.container}>
-        <View style={styles.modelPill}>
-          <Text style={styles.modelPillText}>🤖 Model: {activeEngine}</Text>
-        </View>
-
         <Text style={styles.hint}>
           Tap any answer to cycle through A → B → C → D → blank.
         </Text>
@@ -224,20 +205,6 @@ export default function HandwrittenScanner({ questionCount, onScanned, onError }
 
 const styles = StyleSheet.create({
   container: { gap: 12, marginVertical: 12 },
-  modelPill: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#BFDBFE',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    alignSelf: 'flex-start',
-  },
-  modelPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1E40AF',
-  },
   hint: { fontSize: 12, color: '#4B5563', lineHeight: 18 },
   example: { fontFamily: 'monospace', color: '#1E3A8A', fontWeight: '600' },
   warn: { fontSize: 12, color: '#B45309', backgroundColor: '#FEF9C3', padding: 8, borderRadius: 8 },
