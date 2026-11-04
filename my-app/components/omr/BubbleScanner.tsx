@@ -133,10 +133,15 @@ export default function BubbleScanner({
   }, []);
 
   /**
-   * Run ML Kit text recognition on the loaded image with neural spatial alignment
+   * Run ML Kit text recognition on the loaded image with 1600px normalization & neural spatial alignment
    */
   const executeOcr = async (uri: string): Promise<DetectedAnswer[]> => {
-    const recognition = await TextRecognition.recognize(uri);
+    const manipulated = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 1600 } }],
+      { compress: 0.95, format: ImageManipulator.SaveFormat.JPEG }
+    );
+    const recognition = await TextRecognition.recognize(manipulated.uri);
     return parseAnswerText(recognition, questionCount, expectedOptionsByQuestion);
   };
 
@@ -286,7 +291,9 @@ export default function BubbleScanner({
               )}
               {a.flag !== 'ok' && (
                 <View style={styles.flagBadge}>
-                  <Text style={styles.flagLabel}>{a.flag === 'blank' ? 'Blank' : 'Multiple'}</Text>
+                  <Text style={styles.flagLabel}>
+                    {a.confidence === 99 ? 'Not Attempted' : a.flag === 'blank' ? 'Blank' : 'Multiple'}
+                  </Text>
                 </View>
               )}
             </TouchableOpacity>

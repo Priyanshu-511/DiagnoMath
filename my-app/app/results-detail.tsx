@@ -79,12 +79,21 @@ export default function ResultDetailScreen() {
               key={qd.questionIndex}
               style={[
                 styles.qdCard,
-                qd.isCorrect ? styles.qdCardOk : styles.qdCardWrong,
+                qd.isCorrect
+                  ? styles.qdCardOk
+                  : qd.isNotAttempt
+                  ? styles.qdCardNotAttempt
+                  : styles.qdCardWrong,
               ]}
             >
               <View style={styles.qdCardTop}>
                 <Text style={styles.qdNumber}>
-                  Q{qd.questionNumber} {qd.isCorrect ? '✅ Correct' : '❌ Incorrect'}
+                  Q{qd.questionNumber}{' '}
+                  {qd.isCorrect
+                    ? '✅ Correct'
+                    : qd.isNotAttempt
+                    ? '⚪ Not Attempted'
+                    : '❌ Incorrect'}
                 </Text>
                 {qd.subtopic && (
                   <View style={styles.qdSubtopicPill}>
@@ -101,13 +110,20 @@ export default function ResultDetailScreen() {
                   <Text
                     style={[
                       styles.qdAnswerVal,
-                      qd.isCorrect ? styles.qdValOk : styles.qdValWrong,
+                      qd.isCorrect
+                        ? styles.qdValOk
+                        : qd.isNotAttempt
+                        ? styles.qdValNotAttempt
+                        : styles.qdValWrong,
                     ]}
                   >
-                    Option {qd.chosenLabel}
-                    {qd.chosenOption !== null && qd.options[qd.chosenOption]
-                      ? ` (${qd.options[qd.chosenOption]})`
-                      : ''}
+                    {qd.isNotAttempt
+                      ? 'Not Attempted (e / skipped)'
+                      : `Option ${qd.chosenLabel}${
+                          qd.chosenOption !== null && qd.options[qd.chosenOption]
+                            ? ` (${qd.options[qd.chosenOption]})`
+                            : ''
+                        }`}
                   </Text>
                 </View>
 
@@ -255,6 +271,7 @@ const styles = StyleSheet.create({
   },
   qdCardOk: { borderColor: '#86EFAC', backgroundColor: '#F0FDF4' },
   qdCardWrong: { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' },
+  qdCardNotAttempt: { borderColor: '#D1D5DB', backgroundColor: '#F9FAFB' },
   qdCardTop: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -278,6 +295,7 @@ const styles = StyleSheet.create({
   qdAnswerVal: { fontSize: 12, fontWeight: '700' },
   qdValOk: { color: '#166534' },
   qdValWrong: { color: '#DC2626' },
+  qdValNotAttempt: { color: '#6B7280', fontStyle: 'italic' },
   qdValCorrect: { fontSize: 12, fontWeight: '700', color: '#166534' },
 
   qdOptionGrid: { marginTop: 6, gap: 4 },

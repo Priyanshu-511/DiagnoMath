@@ -20,6 +20,12 @@ export interface MLKitRecognitionInput {
   }>;
 }
 
+interface ParsedHit {
+  option: 0 | 1 | 2 | 3 | null;
+  isNotAttempt: boolean;
+  confidence: number;
+}
+
 /**
  * Normalizes text for comparison by keeping only alphanumeric and slash/dot characters.
  */
@@ -99,8 +105,8 @@ function matchWrittenValueToOption(written: string, options: string[]): 0 | 1 | 
 }
 
 /**
- * Extracts all candidate text lines from either a raw string or an ML Kit recognition result.
- * If spatial blocks/lines are available, sorts them vertically and horizontally.
+ * Extracts candidate text lines from either a raw string or an ML Kit recognition result.
+ * When spatial block/line frames are present, elements on the same horizontal row are grouped.
  */
 function extractTextLines(input: string | MLKitRecognitionInput): string[] {
   if (typeof input === 'string') {
@@ -124,7 +130,6 @@ function extractTextLines(input: string | MLKitRecognitionInput): string[] {
     if (allLines.length > 0) {
       // Sort lines top-to-bottom, left-to-right
       allLines.sort((a, b) => {
-        // Group by roughly same horizontal row (within 16px)
         if (Math.abs(a.top - b.top) > 16) {
           return a.top - b.top;
         }
@@ -138,17 +143,25 @@ function extractTextLines(input: string | MLKitRecognitionInput): string[] {
 }
 
 /**
- * Comprehensive, resilient handwriting OCR parser powered by on-device Softmax neural scoring.
- * Designed to handle the worst possible handwriting conditions:
- *   - Mangled / scribbled letters (A, B, C, D)
- *   - Distorted, smudged, or missing question numbers
- *   - Circled or bracketed answers (e.g. (A), [B], {C})
- *   - Self-corrections & crossed-out mistakes (e.g. student wrote "A C" -> selects C)
- *   - Two-column / multi-column layouts
- *   - Monotonic sequence alignment for gaps in question numbering
- *   - Option value / fraction matching
+ * High-accuracy handwriting OCR identification engine.
+ * Handles:
+ *   1. The 5 answer ways:
+ *      - Option A (0)
+ *      - Option B (1)
+ *      - Option C (2)
+ *      - Option D (3)
+ *      - Not Attempted (null): written as 'e', 'E', 'na', 'skip', '-', 'unattempted', 'blank'
+ *   2. The two writing styles:
+ *      - Style 1: Direct options without question number:
+ *          e.g. a, b, c, d, e (or vertical: a \n b \n c \n d \n e)
+ *      - Style 2: With question number before option:
+ *          e.g. 1. a, 2. b, 3. c, 4. d, 5. e (or 1 a, 1: a, 1) a, 1 - a, Q1 a)
+ *   3. Self-corrections:
+ *      - When a student writes "B A" (crossing out B), picks rightmost candidate "A"
+ *   4. Monotonic sequence gap alignment for skipped/smudged numbers
+ *   5. Written option value matching (e.g. "3/4" or "proper fraction")
  *
- * Runs 100% offline with zero lag (<2ms execution time, completely lightweight).
+ * 100% offline, lightweight, robust against distortions.
  *
  * @param input Raw text string or ML Kit recognition object
  * @param questionCount Total number of questions on the test
@@ -169,26 +182,26 @@ export function parseAnswerText(
   if (!rawLines || rawLines.length === 0) return answers;
 
   // Track occurrences and confidence per question
-  const hitsPerQuestion = new Map<number, Array<{ option: 0 | 1 | 2 | 3; confidence: number }>>();
+  const hitsPerQuestion = new Map<number, ParsedHit[]>();
   for (let i = 0; i < questionCount; i++) {
     hitsPerQuestion.set(i, []);
   }
 
-  // Pre-process lines: circle/bracket unwrapping e.g. (A) -> A, (1) -> 1, [B] -> B
+  // Pre-process lines: circle/bracket unwrapping e.g. (A) -> A, (1) -> 1, [B] -> B, (e) -> e
   const normalizedLines = rawLines
     .map((l) =>
       l
         .replace(/[\u2010-\u2015\u2212]/g, '-') // unicode dashes
-        .replace(/[\(\[\{]\s*([a-dA-D048^@oO\d])\s*[\)\]\}]/g, ' $1 ') // unwrap (A) -> A
+        .replace(/[\(\[\{]\s*([a-eA-E048^@oO\d])\s*[\)\]\}]/g, ' $1 ') // unwrap (A) -> A, (e) -> e
         .trim()
     )
     .filter(Boolean);
 
   const unassignedSegments: string[] = [];
 
-  // ── Strategy 1: Segment & Line-by-Line Neural Parsing ──────────────────────
+  // ── Strategy 1: Style 2 (Numbered question list e.g. 1. a, 1 a, 1: a, 1) a) ──
   for (const line of normalizedLines) {
-    // Split multi-column segments (e.g. "1. A    3. B")
+    // Split multi-column segments (e.g. "1. a   6. b")
     const segments = line.split(/\s{2,}|\t+/);
 
     for (const seg of segments) {
@@ -204,16 +217,25 @@ export function parseAnswerText(
         const qIdx = qNum - 1;
         const restTokens = tokens.slice(1);
 
-        // Self-correction detection:
-        // In handwriting, students write an answer, cross it out, and write a new one next to it.
-        // Therefore, we scan from RIGHT to LEFT to pick the final candidate!
+        // Self-correction detection: scan right-to-left to pick final candidate!
         let found = false;
         for (let tIdx = restTokens.length - 1; tIdx >= 0; tIdx--) {
           const tok = restTokens[tIdx];
           const classification = classifyToken(tok);
-          if (classification.option !== null) {
+
+          if (classification.isNotAttempt) {
+            // Student explicitly wrote 'e', 'E', 'na', 'skip', '-', 'unattempted'
+            hitsPerQuestion.get(qIdx)!.push({
+              option: null,
+              isNotAttempt: true,
+              confidence: 99,
+            });
+            found = true;
+            break;
+          } else if (classification.option !== null) {
             hitsPerQuestion.get(qIdx)!.push({
               option: classification.option,
+              isNotAttempt: false,
               confidence: classification.confidence,
             });
             found = true;
@@ -221,12 +243,12 @@ export function parseAnswerText(
           }
         }
 
-        // If no option letter was found, check if student wrote the answer value (e.g. "3/4")
+        // Check if student wrote answer value (e.g. "3/4" or "proper fraction")
         if (!found && expectedOptionsByQuestion && expectedOptionsByQuestion[qIdx]) {
           const restText = restTokens.join(' ');
           const valOpt = matchWrittenValueToOption(restText, expectedOptionsByQuestion[qIdx]);
           if (valOpt !== null) {
-            hitsPerQuestion.get(qIdx)!.push({ option: valOpt, confidence: 92 });
+            hitsPerQuestion.get(qIdx)!.push({ option: valOpt, isNotAttempt: false, confidence: 92 });
             found = true;
           }
         }
@@ -240,39 +262,44 @@ export function parseAnswerText(
     }
   }
 
-  // ── Strategy 2: Global Lookahead Regex Parsing (for inline continuous lists) ──
-  const fullText = normalizedLines.join('\n');
-  const explicitPattern =
-    /(?:(?:q(?:uestion)?|ans(?:wer)?|no\.?)\s*)?(\d{1,2})\s*[\.\)\:\-\=\s]+([a-zA-Z0-9^@\/\(\[\{][^\n\r,;|\t]*?)(?=(?:\s{2,}|[\r\n]+|\s*(?:q(?:uestion)?|ans(?:wer)?|no\.?)?\d{1,2}(?:[\.\)\:\-\=]|\s+[a-zA-Z0-9])|$))/gi;
+  // ── Strategy 2: Style 1 (Direct option list without numbers: a b c d e) ────
+  // If no numbered answers were found, or if direct option tokens form a clean sequence:
+  const totalNumberedHits = Array.from(hitsPerQuestion.values()).filter((h) => h.length > 0).length;
 
-  let match: RegExpExecArray | null;
-  while ((match = explicitPattern.exec(fullText)) !== null) {
-    const qNum = parseInt(match[1], 10);
-    const qIdx = qNum - 1;
+  if (totalNumberedHits === 0) {
+    const directTokens: ParsedHit[] = [];
 
-    if (qIdx >= 0 && qIdx < questionCount && hitsPerQuestion.get(qIdx)!.length === 0) {
-      const rest = match[2].trim();
-      if (!rest) continue;
+    for (const line of normalizedLines) {
+      const parts = line.split(/[\s,;|]+/);
+      for (const p of parts) {
+        const cleanP = p.trim();
+        if (!cleanP) continue;
 
-      const firstTok = rest.split(/\s+/)[0];
-      const classification = classifyToken(firstTok);
-      if (classification.option !== null) {
-        hitsPerQuestion.get(qIdx)!.push({
-          option: classification.option,
-          confidence: classification.confidence,
-        });
-      } else if (expectedOptionsByQuestion && expectedOptionsByQuestion[qIdx]) {
-        const valOpt = matchWrittenValueToOption(rest, expectedOptionsByQuestion[qIdx]);
-        if (valOpt !== null) {
-          hitsPerQuestion.get(qIdx)!.push({ option: valOpt, confidence: 90 });
+        const classification = classifyToken(cleanP);
+        if (classification.isNotAttempt) {
+          directTokens.push({ option: null, isNotAttempt: true, confidence: 99 });
+        } else if (classification.option !== null) {
+          directTokens.push({
+            option: classification.option,
+            isNotAttempt: false,
+            confidence: classification.confidence,
+          });
         }
+      }
+    }
+
+    if (directTokens.length >= questionCount) {
+      for (let i = 0; i < questionCount; i++) {
+        hitsPerQuestion.get(i)!.push(directTokens[i]);
+      }
+    } else if (directTokens.length > 0) {
+      for (let i = 0; i < Math.min(questionCount, directTokens.length); i++) {
+        hitsPerQuestion.get(i)!.push(directTokens[i]);
       }
     }
   }
 
-  // ── Strategy 3: Monotonic Sequence Alignment (fills gaps in numbering) ─────
-  // If some questions are still empty, but we have unassigned lines with valid candidate letters,
-  // we align them monotonically (Q1 above Q2, Q2 above Q3, etc.).
+  // ── Strategy 3: Monotonic Sequence Alignment (Gap filling for skipped numbers) ──
   const emptyQuestions = [];
   for (let i = 0; i < questionCount; i++) {
     if (hitsPerQuestion.get(i)!.length === 0) {
@@ -281,15 +308,19 @@ export function parseAnswerText(
   }
 
   if (emptyQuestions.length > 0 && unassignedSegments.length > 0) {
-    const unassignedLetters: Array<{ option: 0 | 1 | 2 | 3; confidence: number }> = [];
+    const unassignedHits: ParsedHit[] = [];
 
     for (const seg of unassignedSegments) {
       const toks = seg.split(/\s+/);
       for (let tIdx = toks.length - 1; tIdx >= 0; tIdx--) {
         const classification = classifyToken(toks[tIdx]);
-        if (classification.option !== null) {
-          unassignedLetters.push({
+        if (classification.isNotAttempt) {
+          unassignedHits.push({ option: null, isNotAttempt: true, confidence: 99 });
+          break;
+        } else if (classification.option !== null) {
+          unassignedHits.push({
             option: classification.option,
+            isNotAttempt: false,
             confidence: classification.confidence,
           });
           break;
@@ -297,26 +328,20 @@ export function parseAnswerText(
       }
     }
 
-    // If student wrote bare letter list without numbers (e.g. A \n C \n B \n A)
-    if (emptyQuestions.length === questionCount && unassignedLetters.length >= questionCount) {
-      for (let i = 0; i < questionCount; i++) {
-        hitsPerQuestion.get(i)!.push(unassignedLetters[i]);
-      }
-    } else if (unassignedLetters.length === emptyQuestions.length) {
-      // Exactly fills the missing gaps!
+    if (unassignedHits.length === emptyQuestions.length) {
       for (let k = 0; k < emptyQuestions.length; k++) {
-        hitsPerQuestion.get(emptyQuestions[k])!.push(unassignedLetters[k]);
+        hitsPerQuestion.get(emptyQuestions[k])!.push(unassignedHits[k]);
+      }
+    } else if (emptyQuestions.length === questionCount && unassignedHits.length >= questionCount) {
+      for (let i = 0; i < questionCount; i++) {
+        hitsPerQuestion.get(i)!.push(unassignedHits[i]);
       }
     }
   }
 
-  // ── Strategy 4: Two-Block Layout (1..N on top lines, answers on bottom lines) ──
-  let totalFilled = 0;
-  for (let i = 0; i < questionCount; i++) {
-    if (hitsPerQuestion.get(i)!.length > 0) totalFilled++;
-  }
-
-  if (totalFilled === 0 && normalizedLines.length >= questionCount * 2) {
+  // ── Strategy 4: Two-Block Columnar (1..N followed by answers A..E) ────────
+  const currentTotal = Array.from(hitsPerQuestion.values()).filter((h) => h.length > 0).length;
+  if (currentTotal === 0 && normalizedLines.length >= questionCount * 2) {
     const topLines = normalizedLines.slice(0, questionCount);
     const bottomLines = normalizedLines.slice(questionCount, questionCount * 2);
 
@@ -328,9 +353,12 @@ export function parseAnswerText(
     if (isSequentialNums) {
       for (let i = 0; i < questionCount; i++) {
         const classification = classifyToken(bottomLines[i].split(/\s+/)[0]);
-        if (classification.option !== null) {
+        if (classification.isNotAttempt) {
+          hitsPerQuestion.get(i)!.push({ option: null, isNotAttempt: true, confidence: 99 });
+        } else if (classification.option !== null) {
           hitsPerQuestion.get(i)!.push({
             option: classification.option,
+            isNotAttempt: false,
             confidence: classification.confidence,
           });
         }
@@ -338,33 +366,7 @@ export function parseAnswerText(
     }
   }
 
-  // ── Strategy 5: Bare Sequential Letter Stream (Fallback for unnumbered tests) ──
-  totalFilled = 0;
-  for (let i = 0; i < questionCount; i++) {
-    if (hitsPerQuestion.get(i)!.length > 0) totalFilled++;
-  }
-
-  if (totalFilled === 0) {
-    const bareTokens = fullText
-      .split(/[\s,;|]+/)
-      .map((t) => t.trim())
-      .filter(Boolean);
-
-    let qIdx = 0;
-    for (const tok of bareTokens) {
-      if (qIdx >= questionCount) break;
-      const classification = classifyToken(tok);
-      if (classification.option !== null && classification.confidence >= 80) {
-        hitsPerQuestion.get(qIdx)!.push({
-          option: classification.option,
-          confidence: classification.confidence,
-        });
-        qIdx++;
-      }
-    }
-  }
-
-  // ── Build Final DetectedAnswer Array with Softmax Probabilities ────────────
+  // ── Build Final DetectedAnswer Array ───────────────────────────────────────
   for (let i = 0; i < questionCount; i++) {
     const hits = hitsPerQuestion.get(i)!;
 
@@ -374,24 +376,27 @@ export function parseAnswerText(
         selectedOption: null,
         flag: 'blank',
       };
-    } else if (hits.length === 1) {
-      answers[i] = {
-        questionIndex: i,
-        selectedOption: hits[0].option,
-        flag: 'ok',
-        confidence: Math.max(88, hits[0].confidence),
-      };
     } else {
-      // Multiple candidates: pick the latest (self-corrected) candidate
+      // Pick the latest candidate on the line (respecting self-corrections)
       const lastHit = hits[hits.length - 1];
-      const allSame = hits.every((h) => h.option === hits[0].option);
 
-      answers[i] = {
-        questionIndex: i,
-        selectedOption: lastHit.option,
-        flag: allSame ? 'ok' : 'ok', // self-corrected
-        confidence: allSame ? 95 : 85,
-      };
+      if (lastHit.isNotAttempt || lastHit.option === null) {
+        // Explicitly marked as Not Attempted ('e', 'na', 'skip', '-')
+        answers[i] = {
+          questionIndex: i,
+          selectedOption: null,
+          flag: 'blank',
+          confidence: 99,
+        };
+      } else {
+        const allSame = hits.every((h) => h.option === lastHit.option);
+        answers[i] = {
+          questionIndex: i,
+          selectedOption: lastHit.option,
+          flag: 'ok',
+          confidence: allSame ? Math.max(90, lastHit.confidence) : 85,
+        };
+      }
     }
   }
 

@@ -22,6 +22,7 @@ export interface QuestionDetail {
   correctOption: number;
   correctLabel: string;
   isCorrect: boolean;
+  isNotAttempt?: boolean;
   subtopic?: string;
 }
 
@@ -63,13 +64,23 @@ export function analyzeScan(
     if (!q) return;
 
     const det = detected.find((d) => d.questionIndex === idx);
-    if (det && det.flag !== 'ok') flagged.push(idx + 1);
+    const isExplicitNotAttempt = det?.selectedOption === null && det?.confidence === 99;
+
+    // Only flag for manual verification if mark is ambiguous, not when deliberately unattempted
+    if (det && det.flag !== 'ok' && !isExplicitNotAttempt) {
+      flagged.push(idx + 1);
+    }
 
     const chosenOpt = det?.selectedOption ?? null;
     const isCorrect = chosenOpt !== null && chosenOpt === q.correctIndex;
     if (isCorrect) correctCount++;
 
-    const chosenLbl = chosenOpt !== null ? OPTION_LABELS[chosenOpt] ?? '—' : '—';
+    const chosenLbl =
+      chosenOpt !== null
+        ? OPTION_LABELS[chosenOpt] ?? '—'
+        : isExplicitNotAttempt
+        ? 'Not Attempted'
+        : '—';
     const correctLbl = OPTION_LABELS[q.correctIndex] ?? '—';
 
     // Find human-readable subtopic from question skill annotations
@@ -94,6 +105,7 @@ export function analyzeScan(
       correctOption: q.correctIndex,
       correctLabel: correctLbl,
       isCorrect,
+      isNotAttempt: isExplicitNotAttempt,
       subtopic,
     });
 

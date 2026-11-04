@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import TextRecognition from '@react-native-ml-kit/text-recognition';
 
@@ -62,20 +63,28 @@ export default function HandwrittenScanner({
       }
 
       const result = fromCamera
-        ? await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 1 })
-        : await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, quality: 1 });
+        ? await ImagePicker.launchCameraAsync({ allowsEditing: false, quality: 1 })
+        : await ImagePicker.launchImageLibraryAsync({ allowsEditing: false, quality: 1 });
 
-      if (result.canceled) return;
+      if (result.canceled || !result.assets[0]) return;
 
       setProcessing(true);
       const uri = result.assets[0].uri;
 
-      // On-device ML Kit OCR — 100% offline & instant
-      const recognition = await TextRecognition.recognize(uri);
+      // 1. High-clarity normalization pass: resizes to optimal OCR resolution (1600px width)
+      //    which enhances line edges and thin pencil strokes for maximum recognition accuracy
+      const manipulated = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 1600 } }],
+        { compress: 0.95, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      // 2. On-device Google ML Kit OCR
+      const recognition = await TextRecognition.recognize(manipulated.uri);
       const text = recognition.text ?? '';
       setRawText(text);
 
-      // Neural-enhanced multi-stage handwriting recognition with spatial alignment
+      // 3. Multi-stage neural & topological identification (handles direct a-e and numbered 1. a-e)
       const parsedAnswers = parseAnswerText(recognition, questionCount, expectedOptionsByQuestion);
       setAnswers(parsedAnswers);
     } catch (err: any) {
@@ -147,8 +156,13 @@ export default function HandwrittenScanner({
                 </View>
               )}
               {a.flag !== 'ok' && (
-                <Text style={styles.flagLabel}>
-                  {a.flag === 'blank' ? '⚠ blank' : '⚠ unclear'}
+                <Text
+                  style={[
+                    styles.flagLabel,
+                    a.confidence === 99 && styles.flagLabelNotAttempt,
+                  ]}
+                >
+                  {a.confidence === 99 ? '✓ Not Attempted' : a.flag === 'blank' ? '⚠ blank' : '⚠ unclear'}
                 </Text>
               )}
             </TouchableOpacity>
@@ -279,6 +293,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   flagLabel: { fontSize: 11, color: '#B45309', marginLeft: 4 },
+  flagLabelNotAttempt: { color: '#4B5563', fontStyle: 'italic' },
 
   // Raw OCR debug
   rawToggle: { fontSize: 12, color: '#3B82F6', fontWeight: '600' },

@@ -2,15 +2,24 @@
  * neuralCharScorer.ts
  *
  * Lightweight on-device neural & topological character classifier for handwriting OCR.
- * Maps noisy, scribbled, and distorted handwritten tokens to options A, B, C, D
- * with softmax probabilities and confidence margins.
+ * Supports the 5 answer states:
+ *   1. Option A (0)
+ *   2. Option B (1)
+ *   3. Option C (2)
+ *   4. Option D (3)
+ *   5. Not Attempted (null) — via 'e', 'E', 'na', 'skip', '-', 'blank', 'unattempted'
  *
- * 100% offline, zero network requests, zero overhead (<0.05ms execution time),
- * completely safe for low-end smartphones.
+ * Designed to accurately handle both:
+ *   - Direct options: a, b, c, d, e (or na / skip)
+ *   - Numbered options: 1. a, 2. b, 3. c, 4. d, 5. e
+ *
+ * 100% offline, zero network requests, ultra-fast & lightweight.
  */
 
 export interface CharClassification {
   option: 0 | 1 | 2 | 3 | null;
+  /** True when the student explicitly wrote 'e', 'E', 'na', 'skip', '-', 'unattempted' */
+  isNotAttempt?: boolean;
   confidence: number; // 0..100
   probabilities: [number, number, number, number]; // [P(A), P(B), P(C), P(D)]
   margin: number; // probability margin over runner-up
@@ -53,14 +62,12 @@ const LOGIT_WEIGHTS: Record<string, [number, number, number, number]> = {
   '<': [-2.0, -2.0, 3.6, 0.1],
   '[': [-2.0, -2.0, 3.6, 0.1],
   g: [-2.0, 0.1, 3.3, 0.1], // curved loop
-  e: [0.1, 0.1, 3.4, 0.1], // cursive c with loop
   s: [-1.0, 0.2, 2.8, 0.2],
 
   // ── Option D Variants ──────────────────────────────────────────────
   d: [-2.0, -2.0, -2.0, 4.2],
   '0': [-2.0, -2.0, 0.2, 3.9], // 0 resembles D
   '|)': [-2.0, -2.0, -2.0, 4.3],
-  l: [-2.0, -2.0, -2.0, 4.1],
   ']': [-2.0, -2.0, 0.1, 3.8],
   '}': [-2.0, -2.0, 0.1, 3.6],
   o: [-2.0, -2.0, 0.2, 3.9],
@@ -68,6 +75,30 @@ const LOGIT_WEIGHTS: Record<string, [number, number, number, number]> = {
   p: [0.1, 0.1, -2.0, 3.6],
   u: [0.2, -2.0, 0.3, 3.3],
 };
+
+/** All string representations used to mark a question as Not Attempted */
+const NOT_ATTEMPT_SET = new Set([
+  'e', // 5th option 'e' in exams signifies Not Attempted
+  'na',
+  'n/a',
+  'n.a',
+  'n.a.',
+  'skip',
+  'skipped',
+  'skp',
+  '-',
+  '—',
+  '--',
+  '---',
+  'blank',
+  'none',
+  'nil',
+  'left',
+  'unattempted',
+  'not attempted',
+  'not attempt',
+  'x',
+]);
 
 /** Computes temperature-scaled Softmax over logits */
 function softmax(logits: [number, number, number, number], temperature = 1.0): [number, number, number, number] {
@@ -80,7 +111,9 @@ function softmax(logits: [number, number, number, number], temperature = 1.0): [
 
 /**
  * Classifies any raw token using the Softmax neural scorer.
- * Returns the highest probability option and its confidence score.
+ * Handles the 5 ways:
+ *   - A (0), B (1), C (2), D (3)
+ *   - Not Attempted (e / na / skip / -)
  */
 export function classifyToken(rawToken: string): CharClassification {
   let clean = rawToken.trim().toLowerCase().replace(/[.,;:!]+$/, '');
@@ -89,7 +122,7 @@ export function classifyToken(rawToken: string): CharClassification {
     return { option: null, confidence: 0, probabilities: [0.25, 0.25, 0.25, 0.25], margin: 0 };
   }
 
-  // Only strip enclosing wrapper brackets if length > 1 (e.g. "(A)" -> "A", "[B]" -> "B")
+  // Only strip enclosing wrapper brackets if length > 1 (e.g. "(A)" -> "A", "(e)" -> "e", "[B]" -> "B")
   // Preserve single bracket symbols like "(" or "]" for OCR distortion mapping!
   if (
     clean.length > 1 &&
@@ -97,6 +130,17 @@ export function classifyToken(rawToken: string): CharClassification {
     /[\)\]\}\>\'\"\`]$/.test(clean)
   ) {
     clean = clean.slice(1, -1).trim();
+  }
+
+  // Check Way 5: Not Attempted (e, E, na, skip, -, etc.)
+  if (NOT_ATTEMPT_SET.has(clean)) {
+    return {
+      option: null,
+      isNotAttempt: true,
+      confidence: 99,
+      probabilities: [0, 0, 0, 0],
+      margin: 1.0,
+    };
   }
 
   // Exact single letter check
@@ -126,9 +170,10 @@ export function classifyToken(rawToken: string): CharClassification {
     };
   }
 
-  // If token starts with or contains a single valid letter
+  // If token contains a valid letter
   for (let i = 0; i < clean.length; i++) {
     const ch = clean[i];
+    if (ch === 'e') return { option: null, isNotAttempt: true, confidence: 95, probabilities: [0, 0, 0, 0], margin: 1.0 };
     if (ch === 'a') return { option: 0, confidence: 88, probabilities: [0.88, 0.04, 0.04, 0.04], margin: 0.84 };
     if (ch === 'b') return { option: 1, confidence: 88, probabilities: [0.04, 0.88, 0.04, 0.04], margin: 0.84 };
     if (ch === 'c') return { option: 2, confidence: 88, probabilities: [0.04, 0.04, 0.88, 0.04], margin: 0.84 };
@@ -147,7 +192,8 @@ export function normalizeQuestionNumber(rawToken: string): number | null {
     .trim()
     .toLowerCase()
     .replace(/^q(?:uestion)?|^ans(?:wer)?|^no\.?/i, '')
-    .replace(/[\.\)\:\-\=\s]+$/, '')
+    .replace(/^[\(\[\{\<\'\"\`]+/, '')
+    .replace(/[\)\]\}\>\'\"\`\.\:\-\=\s]+$/, '')
     .trim();
 
   // If it's already an integer
