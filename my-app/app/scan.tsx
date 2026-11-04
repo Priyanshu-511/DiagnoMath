@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BubbleScanner from '@/components/omr/BubbleScanner';
 import { Diagnosis, analyzeScan } from '@/lib/diagnosis/analyze';
 import { DetectedAnswer } from '@/lib/omr/types';
+import { QuestionBank } from '@/lib/questions/types';
 import { getBank } from '@/lib/questions/store';
 import { saveResult } from '@/lib/results/store';
 import { TestTemplate } from '@/lib/tests/types';
@@ -17,6 +18,7 @@ export default function ScanScreen() {
   const insets = useSafeAreaInsets();
   const [tests, setTests] = useState<TestTemplate[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [currentBank, setCurrentBank] = useState<QuestionBank | null>(null);
   const [scanMode, setScanMode] = useState<ScanMode>(null);
   const [studentName, setStudentName] = useState('');
   const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
@@ -28,6 +30,21 @@ export default function ScanScreen() {
   }, []);
 
   const selected = tests.find((t) => t.id === selectedId) ?? null;
+
+  useEffect(() => {
+    if (selected) {
+      getBank(selected.bankId).then((b) => setCurrentBank(b ?? null));
+    } else {
+      setCurrentBank(null);
+    }
+  }, [selected]);
+
+  const expectedOptionsByQuestion = selected && currentBank
+    ? selected.questionIds.map((qid) => {
+        const q = currentBank.questions.find((item) => item.id === qid);
+        return q ? q.options : [];
+      })
+    : undefined;
 
   /** Reset scan mode and diagnosis when user changes test selection */
   const handleSelectTest = (id: string) => {
@@ -68,6 +85,7 @@ export default function ScanScreen() {
         topicBreakdown: diagnosis.topicBreakdown,
         weakTopics: diagnosis.weakTopics,
         flaggedQuestions: diagnosis.flaggedQuestions,
+        questionDetails: diagnosis.questionDetails,
         scannedAt: new Date().toISOString(),
         ...(diagnosis.dina ? { dina: diagnosis.dina } : {}),
       });
@@ -167,6 +185,7 @@ export default function ScanScreen() {
                 onScanned={handleScanned}
                 onError={setError}
                 initialMode={scanMode}
+                expectedOptionsByQuestion={expectedOptionsByQuestion}
               />
             </>
           )}
@@ -196,23 +215,88 @@ export default function ScanScreen() {
                 <Text style={styles.weakSummary}>Weak areas: {diagnosis.weakTopics.join(', ')}</Text>
               )}
 
+              {/* Question-level Right / Wrong Details */}
+              {diagnosis.questionDetails && diagnosis.questionDetails.length > 0 && (
+                <View style={styles.qdSection}>
+                  <Text style={styles.subheading}>Question-by-Question Breakdown</Text>
+                  {diagnosis.questionDetails.map((qd) => (
+                    <View
+                      key={qd.questionIndex}
+                      style={[
+                        styles.qdCard,
+                        qd.isCorrect ? styles.qdCardOk : styles.qdCardWrong,
+                      ]}
+                    >
+                      <View style={styles.qdCardTop}>
+                        <Text style={styles.qdNumber}>
+                          Q{qd.questionNumber} {qd.isCorrect ? '✅ Right' : '❌ Wrong'}
+                        </Text>
+                        {qd.subtopic && (
+                          <View style={styles.qdSubtopicPill}>
+                            <Text style={styles.qdSubtopicPillText}>{qd.subtopic}</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <Text style={styles.qdText} numberOfLines={2}>
+                        {qd.questionText}
+                      </Text>
+
+                      <View style={styles.qdAnswerRow}>
+                        <View style={styles.qdAnswerPill}>
+                          <Text style={styles.qdAnswerLabel}>Chosen:</Text>
+                          <Text
+                            style={[
+                              styles.qdAnswerVal,
+                              qd.isCorrect ? styles.qdValOk : styles.qdValWrong,
+                            ]}
+                          >
+                            Option {qd.chosenLabel}
+                            {qd.chosenOption !== null && qd.options[qd.chosenOption]
+                              ? ` (${qd.options[qd.chosenOption]})`
+                              : ''}
+                          </Text>
+                        </View>
+
+                        {!qd.isCorrect && (
+                          <View style={styles.qdAnswerPillCorrect}>
+                            <Text style={styles.qdAnswerLabel}>Correct:</Text>
+                            <Text style={styles.qdValCorrect}>
+                              Option {qd.correctLabel}
+                              {qd.options[qd.correctOption]
+                                ? ` (${qd.options[qd.correctOption]})`
+                                : ''}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
               {diagnosis.dina && (
                 <View style={styles.dinaBox}>
-                  <Text style={styles.dinaTitle}>🧠 DINA Cognitive Diagnosis</Text>
+                  <Text style={styles.dinaTitle}>🧠 Cognitive Analysis & Subtopic Mastery</Text>
                   <Text style={styles.dinaProfile}>{diagnosis.dina.profileLabel}</Text>
                   <Text style={styles.dinaDetail}>
-                    Likelihood: {diagnosis.dina.likelihood.toFixed(3)} · Margin: ≈
+                    Confidence margin: ≈
                     {diagnosis.dina.marginOverRunnerUp === Infinity
                       ? '∞'
                       : diagnosis.dina.marginOverRunnerUp > 1000
                       ? '>1000x'
                       : `${diagnosis.dina.marginOverRunnerUp}x`}{' '}
-                    more likely
+                    more likely than runner-up
                   </Text>
                   <View style={styles.skillBadges}>
                     {diagnosis.dina.profile.map((sm) => (
-                      <View key={sm.skill} style={[styles.skillBadge, sm.mastered ? styles.skillBadgeOk : styles.skillBadgeWeak]}>
-                        <Text style={[styles.skillBadgeText, sm.mastered ? styles.skillBadgeTextOk : styles.skillBadgeTextWeak]}>
+                      <View
+                        key={sm.skill}
+                        style={[styles.skillBadge, sm.mastered ? styles.skillBadgeOk : styles.skillBadgeWeak]}
+                      >
+                        <Text
+                          style={[styles.skillBadgeText, sm.mastered ? styles.skillBadgeTextOk : styles.skillBadgeTextWeak]}
+                        >
                           {sm.mastered ? '✅' : '❌'} {sm.skill}
                         </Text>
                       </View>
@@ -337,4 +421,48 @@ const styles = StyleSheet.create({
   skillBadgeText: { fontSize: 13, fontWeight: '600' },
   skillBadgeTextOk: { color: '#166534' },
   skillBadgeTextWeak: { color: '#991B1B' },
+
+  /* Question Details Section */
+  qdSection: { marginTop: 12, gap: 8 },
+  qdCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    gap: 6,
+  },
+  qdCardOk: { borderColor: '#86EFAC', backgroundColor: '#F0FDF4' },
+  qdCardWrong: { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' },
+  qdCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  qdNumber: { fontSize: 13, fontWeight: '700', color: '#1E293B' },
+  qdSubtopicPill: {
+    backgroundColor: '#E0E7FF',
+    borderRadius: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+  },
+  qdSubtopicPillText: { fontSize: 11, fontWeight: '600', color: '#3730A3' },
+  qdText: { fontSize: 13, color: '#334155', lineHeight: 18 },
+  qdAnswerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 },
+  qdAnswerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  qdAnswerPillCorrect: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  qdAnswerLabel: { fontSize: 12, color: '#64748B', fontWeight: '500' },
+  qdAnswerVal: { fontSize: 12, fontWeight: '700' },
+  qdValOk: { color: '#166534' },
+  qdValWrong: { color: '#DC2626' },
+  qdValCorrect: { fontSize: 12, fontWeight: '700', color: '#166534' },
 });

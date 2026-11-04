@@ -1,4 +1,4 @@
-import { TopicBreakdown } from '@/lib/diagnosis/analyze';
+import { QuestionDetail, TopicBreakdown } from '@/lib/diagnosis/analyze';
 import { DINAResult } from '@/lib/diagnosis/dina';
 
 export interface ScanResult {
@@ -13,6 +13,8 @@ export interface ScanResult {
   weakTopics: string[];
   flaggedQuestions: number[];
   scannedAt: string;
+  /** Detailed per-question results (chosen answer, correct answer, status) */
+  questionDetails?: QuestionDetail[];
   /** DINA cognitive diagnosis — present when the question bank has skill annotations. */
   dina?: DINAResult;
 }

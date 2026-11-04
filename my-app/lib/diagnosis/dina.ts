@@ -10,6 +10,8 @@
  * and picks the one with the highest likelihood.
  */
 
+import { getSkillMeta } from './skillLabels';
+
 // ─── types ─────────────────────────────────────────────────────────
 
 /** One row of the Q-matrix: which skills an item requires. */
@@ -22,7 +24,12 @@ export interface QMatrixRow {
 
 /** A single skill's mastery status within a profile. */
 export interface SkillMastery {
+  /** Human-readable subtopic name, e.g. "Addition of Fractions (Like Denominators)" */
   skill: string;
+  /** Short skill code, e.g. "A9" */
+  skillCode?: string;
+  /** Chapter / Domain name, e.g. "Fractions" */
+  chapter?: string;
   mastered: boolean;
 }
 
@@ -153,22 +160,26 @@ export function runDINA(input: DINAInput): DINAResult {
   }
 
   const bestProfile = profiles[bestIdx];
-  const profileEntries: SkillMastery[] = skills.map((sk, i) => ({
-    skill: sk,
-    mastered: bestProfile[i] === 1,
-  }));
+  const profileEntries: SkillMastery[] = skills.map((sk, i) => {
+    const meta = getSkillMeta(sk);
+    return {
+      skill: meta.name,
+      skillCode: sk,
+      chapter: meta.chapter,
+      mastered: bestProfile[i] === 1,
+    };
+  });
 
   const weakSkills = profileEntries
     .filter((e) => !e.mastered)
     .map((e) => e.skill);
 
   // Build human-readable label
-  const vecStr = K > 0 ? `(${bestProfile.join(', ')})` : '';
-  const notMasteredParts = weakSkills.map((s) => `${s} NOT mastered`);
+  const notMasteredParts = weakSkills;
   const profileLabel =
     weakSkills.length === 0
-      ? `${vecStr ? vecStr + ' — ' : ''}All skills mastered`
-      : `${vecStr} — ${notMasteredParts.join(', ')}`;
+      ? 'All subtopics mastered'
+      : `Needs practice in: ${notMasteredParts.join(', ')}`;
 
   // Margin: ratio of best likelihood to runner-up (in natural scale)
   const margin =

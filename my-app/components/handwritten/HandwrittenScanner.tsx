@@ -75,7 +75,8 @@ export default function HandwrittenScanner({
       const text = recognition.text ?? '';
       setRawText(text);
 
-      const parsedAnswers = parseAnswerText(text, questionCount, expectedOptionsByQuestion);
+      // Neural-enhanced multi-stage handwriting recognition with spatial alignment
+      const parsedAnswers = parseAnswerText(recognition, questionCount, expectedOptionsByQuestion);
       setAnswers(parsedAnswers);
     } catch (err: any) {
       onError(err?.message ?? 'Could not recognise the handwritten answers');

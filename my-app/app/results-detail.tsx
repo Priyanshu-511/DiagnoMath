@@ -70,9 +70,99 @@ export default function ResultDetailScreen() {
         </View>
       )}
 
+      {/* Question Details Section */}
+      {result.questionDetails && result.questionDetails.length > 0 && (
+        <View style={styles.qdSection}>
+          <Text style={styles.subheading}>Question Details & Answer Review</Text>
+          {result.questionDetails.map((qd) => (
+            <View
+              key={qd.questionIndex}
+              style={[
+                styles.qdCard,
+                qd.isCorrect ? styles.qdCardOk : styles.qdCardWrong,
+              ]}
+            >
+              <View style={styles.qdCardTop}>
+                <Text style={styles.qdNumber}>
+                  Q{qd.questionNumber} {qd.isCorrect ? '✅ Correct' : '❌ Incorrect'}
+                </Text>
+                {qd.subtopic && (
+                  <View style={styles.qdSubtopicPill}>
+                    <Text style={styles.qdSubtopicPillText}>{qd.subtopic}</Text>
+                  </View>
+                )}
+              </View>
+
+              <Text style={styles.qdText}>{qd.questionText}</Text>
+
+              <View style={styles.qdAnswerRow}>
+                <View style={styles.qdAnswerPill}>
+                  <Text style={styles.qdAnswerLabel}>Chosen:</Text>
+                  <Text
+                    style={[
+                      styles.qdAnswerVal,
+                      qd.isCorrect ? styles.qdValOk : styles.qdValWrong,
+                    ]}
+                  >
+                    Option {qd.chosenLabel}
+                    {qd.chosenOption !== null && qd.options[qd.chosenOption]
+                      ? ` (${qd.options[qd.chosenOption]})`
+                      : ''}
+                  </Text>
+                </View>
+
+                {!qd.isCorrect && (
+                  <View style={styles.qdAnswerPillCorrect}>
+                    <Text style={styles.qdAnswerLabel}>Correct:</Text>
+                    <Text style={styles.qdValCorrect}>
+                      Option {qd.correctLabel}
+                      {qd.options[qd.correctOption]
+                        ? ` (${qd.options[qd.correctOption]})`
+                        : ''}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* All choices for quick review */}
+              {qd.options && qd.options.length > 0 && (
+                <View style={styles.qdOptionGrid}>
+                  {qd.options.map((optText, optIdx) => {
+                    const optLetter = ['A', 'B', 'C', 'D'][optIdx];
+                    const isSelected = qd.chosenOption === optIdx;
+                    const isTheCorrectOne = qd.correctOption === optIdx;
+                    return (
+                      <View
+                        key={optIdx}
+                        style={[
+                          styles.qdOptChoice,
+                          isTheCorrectOne && styles.qdOptChoiceCorrect,
+                          isSelected && !isTheCorrectOne && styles.qdOptChoiceWrong,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.qdOptChoiceText,
+                            isTheCorrectOne && styles.qdOptChoiceTextCorrect,
+                            isSelected && !isTheCorrectOne && styles.qdOptChoiceTextWrong,
+                          ]}
+                        >
+                          {optLetter}. {optText}
+                          {isTheCorrectOne ? ' ✓' : isSelected ? ' ✗' : ''}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          ))}
+        </View>
+      )}
+
       {result.dina && (
         <View style={styles.dinaBox}>
-          <Text style={styles.dinaTitle}>🧠 DINA Cognitive Diagnosis</Text>
+          <Text style={styles.dinaTitle}>🧠 Cognitive Analysis & Subtopic Mastery</Text>
           <Text style={styles.dinaProfile}>{result.dina.profileLabel}</Text>
           <Text style={styles.dinaDetail}>
             Likelihood: {result.dina.likelihood.toFixed(3)} · Margin: ≈
@@ -84,7 +174,7 @@ export default function ResultDetailScreen() {
             more likely than runner-up
           </Text>
 
-          <Text style={styles.dinaSkillHeading}>Skill Mastery</Text>
+          <Text style={styles.dinaSkillHeading}>Chapter Subtopic Mastery</Text>
           <View style={styles.skillBadges}>
             {result.dina.profile.map((sm) => (
               <View key={sm.skill} style={[styles.skillBadge, sm.mastered ? styles.skillBadgeOk : styles.skillBadgeWeak]}>
@@ -97,7 +187,7 @@ export default function ResultDetailScreen() {
 
           {result.dina.weakSkills.length > 0 && (
             <Text style={styles.dinaWeakSummary}>
-              Not mastered: {result.dina.weakSkills.join(', ')}
+              Needs practice: {result.dina.weakSkills.join(', ')}
             </Text>
           )}
         </View>
@@ -153,4 +243,61 @@ const styles = StyleSheet.create({
     color: '#B45309',
     marginTop: 8,
   },
+
+  /* Question Details & Review */
+  qdSection: { marginTop: 16, gap: 10 },
+  qdCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    gap: 8,
+  },
+  qdCardOk: { borderColor: '#86EFAC', backgroundColor: '#F0FDF4' },
+  qdCardWrong: { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' },
+  qdCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  qdNumber: { fontSize: 14, fontWeight: '700', color: '#1E293B' },
+  qdSubtopicPill: {
+    backgroundColor: '#E0E7FF',
+    borderRadius: 6,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+  },
+  qdSubtopicPillText: { fontSize: 11, fontWeight: '600', color: '#3730A3' },
+  qdText: { fontSize: 13, color: '#334155', lineHeight: 19 },
+  qdAnswerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 2 },
+  qdAnswerPill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  qdAnswerPillCorrect: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  qdAnswerLabel: { fontSize: 12, color: '#64748B', fontWeight: '500' },
+  qdAnswerVal: { fontSize: 12, fontWeight: '700' },
+  qdValOk: { color: '#166534' },
+  qdValWrong: { color: '#DC2626' },
+  qdValCorrect: { fontSize: 12, fontWeight: '700', color: '#166534' },
+
+  qdOptionGrid: { marginTop: 6, gap: 4 },
+  qdOptChoice: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  qdOptChoiceCorrect: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  qdOptChoiceWrong: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FCA5A5',
+  },
+  qdOptChoiceText: { fontSize: 12, color: '#475569' },
+  qdOptChoiceTextCorrect: { fontWeight: '700', color: '#166534' },
+  qdOptChoiceTextWrong: { fontWeight: '700', color: '#DC2626' },
 });

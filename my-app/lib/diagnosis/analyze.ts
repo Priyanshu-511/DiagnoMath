@@ -2,12 +2,27 @@ import { QuestionBank } from '@/lib/questions/types';
 import { TestTemplate } from '@/lib/tests/types';
 import { DetectedAnswer } from '@/lib/omr/types';
 import { DINAResult, QMatrixRow, runDINA } from '@/lib/diagnosis/dina';
+import { getSkillLabel } from '@/lib/diagnosis/skillLabels';
 
 export interface TopicBreakdown {
   topic: string;
   correct: number;
   total: number;
   percent: number;
+}
+
+export interface QuestionDetail {
+  questionIndex: number;
+  questionNumber: number;
+  questionText: string;
+  topic: string;
+  options: string[];
+  chosenOption: number | null;
+  chosenLabel: string;
+  correctOption: number;
+  correctLabel: string;
+  isCorrect: boolean;
+  subtopic?: string;
 }
 
 export interface Diagnosis {
@@ -18,11 +33,14 @@ export interface Diagnosis {
   weakTopics: string[];
   /** 1-based question numbers the scanner couldn't read confidently */
   flaggedQuestions: number[];
+  /** Detailed breakdown per question showing chosen and correct options */
+  questionDetails: QuestionDetail[];
   /** DINA cognitive diagnosis — present when the question bank has skill annotations. */
   dina?: DINAResult;
 }
 
 const WEAK_THRESHOLD_PERCENT = 60;
+const OPTION_LABELS = ['A', 'B', 'C', 'D'];
 
 export function analyzeScan(
   test: TestTemplate,
@@ -32,6 +50,7 @@ export function analyzeScan(
   const byId = new Map(bank.questions.map((q) => [q.id, q]));
   const topicMap = new Map<string, { correct: number; total: number }>();
   const flagged: number[] = [];
+  const questionDetails: QuestionDetail[] = [];
   let correctCount = 0;
 
   // Collect responses for DINA
@@ -46,8 +65,37 @@ export function analyzeScan(
     const det = detected.find((d) => d.questionIndex === idx);
     if (det && det.flag !== 'ok') flagged.push(idx + 1);
 
-    const isCorrect = det?.selectedOption != null && det.selectedOption === q.correctIndex;
+    const chosenOpt = det?.selectedOption ?? null;
+    const isCorrect = chosenOpt !== null && chosenOpt === q.correctIndex;
     if (isCorrect) correctCount++;
+
+    const chosenLbl = chosenOpt !== null ? OPTION_LABELS[chosenOpt] ?? '—' : '—';
+    const correctLbl = OPTION_LABELS[q.correctIndex] ?? '—';
+
+    // Find human-readable subtopic from question skill annotations
+    let subtopic: string | undefined;
+    if (q.skills) {
+      const active = Object.entries(q.skills)
+        .filter(([_, v]) => v === 1)
+        .map(([k]) => getSkillLabel(k));
+      if (active.length > 0) {
+        subtopic = active.join(', ');
+      }
+    }
+
+    questionDetails.push({
+      questionIndex: idx,
+      questionNumber: idx + 1,
+      questionText: q.text,
+      topic: q.topic,
+      options: q.options,
+      chosenOption: chosenOpt,
+      chosenLabel: chosenLbl,
+      correctOption: q.correctIndex,
+      correctLabel: correctLbl,
+      isCorrect,
+      subtopic,
+    });
 
     const stat = topicMap.get(q.topic) ?? { correct: 0, total: 0 };
     stat.total++;
@@ -99,6 +147,7 @@ export function analyzeScan(
     topicBreakdown,
     weakTopics,
     flaggedQuestions: flagged,
+    questionDetails,
     ...(dina ? { dina } : {}),
   };
 }
