@@ -344,7 +344,12 @@ export function buildScannerHtml({
     window.ReactNativeWebView.postMessage(JSON.stringify({ error: 'Failed to load the captured image' }));
   };
 
-  img.src = "${imageDataUri}";
+  var rawUri = "${imageDataUri || ''}";
+  if (!rawUri || rawUri === "undefined" || rawUri.length < 20) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ error: 'Image data is invalid or missing' }));
+  } else {
+    img.src = rawUri;
+  }
 </script>
 </body>
 </html>`;

@@ -12,14 +12,11 @@ import { saveResult } from '@/lib/results/store';
 import { TestTemplate } from '@/lib/tests/types';
 import { listTests } from '@/lib/tests/store';
 
-type ScanMode = 'camera' | 'gallery' | null;
-
 export default function ScanScreen() {
   const insets = useSafeAreaInsets();
   const [tests, setTests] = useState<TestTemplate[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentBank, setCurrentBank] = useState<QuestionBank | null>(null);
-  const [scanMode, setScanMode] = useState<ScanMode>(null);
   const [studentName, setStudentName] = useState('');
   const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
   const [saving, setSaving] = useState(false);
@@ -46,10 +43,9 @@ export default function ScanScreen() {
       })
     : undefined;
 
-  /** Reset scan mode and diagnosis when user changes test selection */
+  /** Reset diagnosis when user changes test selection */
   const handleSelectTest = (id: string) => {
     setSelectedId(id);
-    setScanMode(null);
     setDiagnosis(null);
     setError('');
   };
@@ -131,7 +127,7 @@ export default function ScanScreen() {
             <Text style={styles.testLabel}>
               {selected.name} · {selected.questionIds.length} questions
             </Text>
-            <TouchableOpacity onPress={() => { setSelectedId(null); setScanMode(null); setDiagnosis(null); setError(''); }}>
+            <TouchableOpacity onPress={() => { setSelectedId(null); setDiagnosis(null); setError(''); }}>
               <Text style={styles.changeTest}>Change</Text>
             </TouchableOpacity>
           </View>
@@ -144,53 +140,23 @@ export default function ScanScreen() {
             onChangeText={setStudentName}
           />
 
-          {/* ── Scan mode selector ──────────────────────────────────────── */}
-          {!diagnosis && !scanMode && (
-            <View style={styles.modeSection}>
-              <Text style={styles.modeLabel}>How would you like to submit the answer sheet?</Text>
-              <View style={styles.modeRow}>
-                <TouchableOpacity
-                  style={styles.modeCard}
-                  onPress={() => setScanMode('camera')}
-                >
-                  <Text style={styles.modeIcon}>📷</Text>
-                  <Text style={styles.modeTitle}>Scan with Camera</Text>
-                  <Text style={styles.modeDesc}>Use your camera to capture the sheet in real time</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.modeCard, styles.modeCardAlt]}
-                  onPress={() => setScanMode('gallery')}
-                >
-                  <Text style={styles.modeIcon}>🖼️</Text>
-                  <Text style={styles.modeTitle}>Upload Image</Text>
-                  <Text style={styles.modeDesc}>Pick an existing photo from your gallery to verify</Text>
-                </TouchableOpacity>
-              </View>
+          {error ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>⚠️ {error}</Text>
+              <TouchableOpacity onPress={() => setError('')}>
+                <Text style={styles.errorDismiss}>Dismiss</Text>
+              </TouchableOpacity>
             </View>
-          )}
+          ) : null}
 
-          {!diagnosis && scanMode && (
-            <>
-              <View style={styles.modeActiveBar}>
-                <Text style={styles.modeActiveText}>
-                  {scanMode === 'camera' ? '📷 Camera mode' : '🖼️ Gallery upload mode'}
-                </Text>
-                <TouchableOpacity onPress={() => { setScanMode(null); setError(''); }}>
-                  <Text style={styles.changeModeText}>Change</Text>
-                </TouchableOpacity>
-              </View>
-              <BubbleScanner
-                questionCount={selected.questionIds.length}
-                onScanned={handleScanned}
-                onError={setError}
-                initialMode={scanMode}
-                expectedOptionsByQuestion={expectedOptionsByQuestion}
-              />
-            </>
+          {!diagnosis && (
+            <BubbleScanner
+              questionCount={selected.questionIds.length}
+              onScanned={handleScanned}
+              onError={setError}
+              expectedOptionsByQuestion={expectedOptionsByQuestion}
+            />
           )}
-
-          {error ? <Text style={styles.error}>{error}</Text> : null}
 
           {diagnosis && (
             <View style={styles.result}>
@@ -401,6 +367,20 @@ const styles = StyleSheet.create({
   modeActiveText: { fontSize: 13, fontWeight: '600', color: '#1E40AF' },
   changeModeText: { fontSize: 13, color: '#3B82F6', fontWeight: '600' },
   error: { color: '#DC2626', fontSize: 13 },
+  errorBanner: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FCA5A5',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  errorText: { color: '#DC2626', fontSize: 13, fontWeight: '500', flex: 1 },
+  errorDismiss: { color: '#2563EB', fontSize: 12, fontWeight: '700' },
   result: { marginTop: 12, gap: 6 },
   resultScore: { fontSize: 20, fontWeight: '700', color: '#1E3A8A' },
   subheading: { fontSize: 14, fontWeight: '700', color: '#1E3A8A', marginTop: 10 },

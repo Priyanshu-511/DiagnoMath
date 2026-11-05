@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,9 +24,11 @@ interface Props {
 
 const OPTION_LABELS = ['A', 'B', 'C', 'D'];
 
-/** Convert a 0-based option index to its display letter, or '—' for null. */
-function optionLabel(opt: 0 | 1 | 2 | 3 | null): string {
-  return opt !== null ? OPTION_LABELS[opt] : '—';
+/** Convert a 0-based option index to its display letter, or 'NA' or '—'. */
+function optionLabel(opt: 0 | 1 | 2 | 3 | null, confidence?: number): string {
+  if (opt !== null) return OPTION_LABELS[opt];
+  if (confidence === 99) return 'NA';
+  return '—';
 }
 
 export default function HandwrittenScanner({
@@ -35,19 +38,34 @@ export default function HandwrittenScanner({
   onError,
 }: Props) {
   const [processing, setProcessing] = useState(false);
+  const [imageUri, setImageUri] = useState<string | null>(null);
   const [rawText, setRawText] = useState<string | null>(null);
   const [showRaw, setShowRaw] = useState(false);
   const [answers, setAnswers] = useState<DetectedAnswer[] | null>(null);
 
-  /** Cycle through A → B → C → D → blank for a given row */
+  /** Cycle through A → B → C → D → Not Attempted → blank */
   const cycleOption = (qIdx: number) => {
     if (!answers) return;
     setAnswers((prev) =>
       (prev ?? []).map((a) => {
         if (a.questionIndex !== qIdx) return a;
-        const next = a.selectedOption === null ? 0 : ((a.selectedOption + 1) % 5);
-        const opt = next === 4 ? null : (next as 0 | 1 | 2 | 3);
-        return { ...a, selectedOption: opt, flag: 'ok' };
+        if (a.selectedOption === null) {
+          if (a.confidence === 99) {
+            // From Not Attempted -> Blank
+            return { ...a, selectedOption: null, flag: 'blank', confidence: 0 };
+          } else {
+            // From Blank -> Option A
+            return { ...a, selectedOption: 0, flag: 'ok', confidence: 100 };
+          }
+        }
+        if (a.selectedOption === 0) return { ...a, selectedOption: 1, flag: 'ok', confidence: 100 };
+        if (a.selectedOption === 1) return { ...a, selectedOption: 2, flag: 'ok', confidence: 100 };
+        if (a.selectedOption === 2) return { ...a, selectedOption: 3, flag: 'ok', confidence: 100 };
+        if (a.selectedOption === 3) {
+          // To Not Attempted (5th way)
+          return { ...a, selectedOption: null, flag: 'blank', confidence: 99 };
+        }
+        return { ...a, selectedOption: 0, flag: 'ok', confidence: 100 };
       }),
     );
   };
@@ -68,8 +86,9 @@ export default function HandwrittenScanner({
 
       if (result.canceled || !result.assets[0]) return;
 
-      setProcessing(true);
       const uri = result.assets[0].uri;
+      setImageUri(uri);
+      setProcessing(true);
 
       // 1. High-clarity normalization pass: resizes to optimal OCR resolution (1600px width)
       //    which enhances line edges and thin pencil strokes for maximum recognition accuracy
@@ -100,26 +119,42 @@ export default function HandwrittenScanner({
 
   const handleRetake = () => {
     setAnswers(null);
+    setImageUri(null);
     setRawText(null);
     setShowRaw(false);
   };
 
   // ── Preview / edit table ────────────────────────────────────────────────────
   if (answers) {
-    const blanks = answers.filter((a) => a.flag === 'blank').length;
+    const blanks = answers.filter((a) => a.flag === 'blank' && a.confidence !== 99).length;
+    const notAttempted = answers.filter((a) => a.confidence === 99).length;
     const multiples = answers.filter((a) => a.flag === 'multiple').length;
 
     return (
       <View style={styles.container}>
+        {/* Uploaded Sheet Thumbnail Card */}
+        {imageUri && (
+          <View style={styles.imageCard}>
+            <Image source={{ uri: imageUri }} style={styles.imageThumb} resizeMode="cover" />
+            <View style={styles.imageCardInfo}>
+              <Text style={styles.imageCardTitle}>✏️ Handwritten Answer Sheet</Text>
+              <Text style={styles.imageCardSub}>Answers identified via on-device AI OCR</Text>
+            </View>
+            <TouchableOpacity style={styles.imageChangeBtn} onPress={() => capture(false)}>
+              <Text style={styles.imageChangeBtnText}>Change</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <Text style={styles.hint}>
-          Tap any answer to cycle through A → B → C → D → blank.
+          Tap any answer to adjust (cycles A → B → C → D → NA → Blank).
         </Text>
 
-        {(blanks > 0 || multiples > 0) && (
+        {(blanks > 0 || multiples > 0 || notAttempted > 0) && (
           <Text style={styles.warn}>
-            {blanks > 0 ? `${blanks} blank` : ''}
-            {blanks > 0 && multiples > 0 ? ', ' : ''}
-            {multiples > 0 ? `${multiples} unclear` : ''} — fix before saving.
+            {notAttempted > 0 ? `✓ ${notAttempted} not attempted. ` : ''}
+            {blanks > 0 ? `⚠️ ${blanks} blank. ` : ''}
+            {multiples > 0 ? `⚠️ ${multiples} unclear. ` : ''}Fix before saving.
           </Text>
         )}
 
@@ -129,7 +164,8 @@ export default function HandwrittenScanner({
               key={a.questionIndex}
               style={[
                 styles.row,
-                a.flag === 'blank' && styles.rowBlank,
+                a.flag === 'blank' && a.confidence !== 99 && styles.rowBlank,
+                a.confidence === 99 && styles.rowNotAttempt,
                 a.flag === 'multiple' && styles.rowMultiple,
               ]}
               onPress={() => cycleOption(a.questionIndex)}
@@ -139,30 +175,32 @@ export default function HandwrittenScanner({
                 style={[
                   styles.badge,
                   a.selectedOption !== null && styles.badgeFilled,
+                  a.confidence === 99 && styles.badgeNotAttempt,
                 ]}
               >
                 <Text
                   style={[
                     styles.badgeText,
                     a.selectedOption !== null && styles.badgeTextFilled,
+                    a.confidence === 99 && styles.badgeTextNotAttempt,
                   ]}
                 >
-                  {optionLabel(a.selectedOption)}
+                  {optionLabel(a.selectedOption, a.confidence)}
                 </Text>
               </View>
-              {typeof a.confidence === 'number' && (
+              {typeof a.confidence === 'number' && a.confidence !== 99 && (
                 <View style={styles.confidencePill}>
                   <Text style={styles.confidenceText}>{a.confidence}%</Text>
                 </View>
               )}
-              {a.flag !== 'ok' && (
-                <Text
-                  style={[
-                    styles.flagLabel,
-                    a.confidence === 99 && styles.flagLabelNotAttempt,
-                  ]}
-                >
-                  {a.confidence === 99 ? '✓ Not Attempted' : a.flag === 'blank' ? '⚠ blank' : '⚠ unclear'}
+              {a.confidence === 99 && (
+                <View style={styles.notAttemptPill}>
+                  <Text style={styles.notAttemptPillText}>Not Attempted (e / skipped)</Text>
+                </View>
+              )}
+              {a.flag !== 'ok' && a.confidence !== 99 && (
+                <Text style={styles.flagLabel}>
+                  {a.flag === 'blank' ? '⚠ blank' : '⚠ unclear'}
                 </Text>
               )}
             </TouchableOpacity>
@@ -265,6 +303,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   rowBlank: { borderColor: '#FCD34D', backgroundColor: '#FFFBEB' },
+  rowNotAttempt: { borderColor: '#CBD5E1', backgroundColor: '#F8FAFC' },
   rowMultiple: { borderColor: '#FCA5A5', backgroundColor: '#FFF1F2' },
   qNum: { width: 36, fontSize: 13, color: '#6B7280', fontWeight: '600' },
   badge: {
@@ -277,8 +316,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   badgeFilled: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
+  badgeNotAttempt: { backgroundColor: '#F1F5F9', borderColor: '#94A3B8' },
   badgeText: { fontSize: 14, fontWeight: '700', color: '#9CA3AF' },
   badgeTextFilled: { color: '#fff' },
+  badgeTextNotAttempt: { color: '#475569', fontWeight: '800' },
   confidencePill: {
     backgroundColor: '#ECFDF5',
     borderColor: '#A7F3D0',
@@ -292,8 +333,51 @@ const styles = StyleSheet.create({
     color: '#065F46',
     fontWeight: '700',
   },
+  notAttemptPill: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+    borderWidth: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  notAttemptPillText: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '600',
+  },
   flagLabel: { fontSize: 11, color: '#B45309', marginLeft: 4 },
   flagLabelNotAttempt: { color: '#4B5563', fontStyle: 'italic' },
+
+  // Image Card
+  imageCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    gap: 12,
+  },
+  imageThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+  },
+  imageCardInfo: { flex: 1 },
+  imageCardTitle: { fontSize: 14, fontWeight: '700', color: '#1E293B' },
+  imageCardSub: { fontSize: 11, color: '#64748B', marginTop: 2 },
+  imageChangeBtn: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  imageChangeBtnText: { fontSize: 12, fontWeight: '700', color: '#1D4ED8' },
 
   // Raw OCR debug
   rawToggle: { fontSize: 12, color: '#3B82F6', fontWeight: '600' },
