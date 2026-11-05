@@ -17,6 +17,7 @@ import { BUBBLE_RADIUS, PAGE_HEIGHT, PAGE_WIDTH, getBubbleLayout } from '@/lib/o
 import { buildScannerHtml } from '@/lib/omr/scannerHtml';
 import { parseAnswerText } from '@/lib/handwritten/parseAnswerText';
 import { DetectedAnswer } from '@/lib/omr/types';
+import ImageCropperModal from '@/components/ImageCropperModal';
 
 interface Props {
   questionCount: number;
@@ -57,6 +58,10 @@ export default function BubbleScanner({
 }: Props) {
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [originalImageUri, setOriginalImageUri] = useState<string | null>(null);
+  const [imageDims, setImageDims] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  const [cropModalVisible, setCropModalVisible] = useState(false);
+
   const [processing, setProcessing] = useState(false);
   const [statusText, setStatusText] = useState('Reading answers…');
   const [answers, setAnswers] = useState<DetectedAnswer[] | null>(null);
@@ -107,6 +112,72 @@ export default function BubbleScanner({
     return parseAnswerText(recognition, questionCount, expectedOptionsByQuestion);
   };
 
+  /**
+   * Core scan pipeline: handles both OCR (handwritten) and OMR (bubble)
+   */
+  const processImage = async (uri: string) => {
+    setProcessing(true);
+    setStatusText('Reading answers from cropped sheet…');
+
+    try {
+      // ── Step 1: Run native Google ML Kit OCR first (~200ms) ──
+      let parsedOcr: DetectedAnswer[] | null = null;
+      let ocrConfidentCount = 0;
+      try {
+        parsedOcr = await executeOcr(uri);
+        setOcrAnswers(parsedOcr);
+        ocrConfidentCount = parsedOcr.filter(
+          (a) => a.selectedOption !== null || a.confidence === 99
+        ).length;
+      } catch (ocrErr) {
+        console.warn('OCR error during scan:', ocrErr);
+      }
+
+      // If OCR identified >= 2 answers or >= 50% of the questions:
+      const minOcrThreshold = Math.min(2, Math.max(1, Math.ceil(questionCount / 2)));
+      if (parsedOcr && ocrConfidentCount >= minOcrThreshold) {
+        setScanEngine('ocr');
+        setAnswers(parsedOcr);
+        setProcessing(false);
+
+        // Also prepare OMR base64 in the background
+        ImageManipulator.manipulateAsync(
+          uri,
+          [{ resize: { width: PAGE_WIDTH } }],
+          { base64: true, compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+        )
+          .then((m) => {
+            if (m.base64) setImageBase64(m.base64);
+          })
+          .catch(() => {});
+        return;
+      }
+
+      // ── Step 2: Bubble OMR check ──
+      setStatusText('Analyzing bubble marks…');
+      const manipulated = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: PAGE_WIDTH } }],
+        { base64: true, compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      if (!manipulated.base64) {
+        if (parsedOcr) {
+          setScanEngine('ocr');
+          setAnswers(parsedOcr);
+          setProcessing(false);
+          return;
+        }
+        throw new Error('Could not process photo');
+      }
+
+      setImageBase64(manipulated.base64);
+    } catch (err: any) {
+      setProcessing(false);
+      onError(err?.message ?? 'Failed to recognize answers from image');
+    }
+  };
+
   const capture = async (fromCamera: boolean) => {
     try {
       const permission = fromCamera
@@ -128,7 +199,7 @@ export default function BubbleScanner({
 
       const result = await pickerFn({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
+        allowsEditing: true, // Native OS Cropper opens automatically upon photo selection
         quality: 1,
       });
 
@@ -136,63 +207,13 @@ export default function BubbleScanner({
 
       const asset = result.assets[0];
       setImageUri(asset.uri);
-      setProcessing(true);
-      setStatusText('Reading answer sheet with AI OCR…');
+      setOriginalImageUri(asset.uri);
+      setImageDims({
+        width: asset.width ?? 0,
+        height: asset.height ?? 0,
+      });
 
-      // ── Step 1: Run native Google ML Kit OCR first (super fast: ~200-300ms) ──
-      let parsedOcr: DetectedAnswer[] | null = null;
-      let ocrConfidentCount = 0;
-      try {
-        parsedOcr = await executeOcr(asset.uri);
-        setOcrAnswers(parsedOcr);
-        ocrConfidentCount = parsedOcr.filter(
-          (a) => a.selectedOption !== null || a.confidence === 99
-        ).length;
-      } catch (ocrErr) {
-        console.warn('Initial OCR check error:', ocrErr);
-      }
-
-      // If OCR identified >= 2 answers or >= 50% of the questions:
-      // it is a HANDWRITTEN sheet! Select OCR immediately!
-      const minOcrThreshold = Math.min(2, Math.max(1, Math.ceil(questionCount / 2)));
-      if (parsedOcr && ocrConfidentCount >= minOcrThreshold) {
-        setScanEngine('ocr');
-        setAnswers(parsedOcr);
-        setProcessing(false);
-
-        // Also prepare OMR base64 in the background in case user wants to toggle
-        ImageManipulator.manipulateAsync(
-          asset.uri,
-          [{ resize: { width: PAGE_WIDTH } }],
-          { base64: true, compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
-        )
-          .then((m) => {
-            if (m.base64) setImageBase64(m.base64);
-          })
-          .catch(() => {});
-        return;
-      }
-
-      // ── Step 2: If OCR found few/no answers, it's likely a printed OMR bubble sheet ──
-      setStatusText('Checking bubble markings…');
-      const manipulated = await ImageManipulator.manipulateAsync(
-        asset.uri,
-        [{ resize: { width: PAGE_WIDTH } }],
-        { base64: true, compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
-      );
-
-      if (!manipulated.base64) {
-        // Fall back to OCR answers if available
-        if (parsedOcr) {
-          setScanEngine('ocr');
-          setAnswers(parsedOcr);
-          setProcessing(false);
-          return;
-        }
-        throw new Error('Could not process photo');
-      }
-
-      setImageBase64(manipulated.base64);
+      await processImage(asset.uri);
     } catch (err: any) {
       setProcessing(false);
       onError(err?.message ?? 'Failed to capture or load sheet');
@@ -210,7 +231,6 @@ export default function BubbleScanner({
     try {
       const parsed = JSON.parse(event.nativeEvent.data);
       if (!Array.isArray(parsed)) {
-        // If WebView OMR reported an error, gracefully fall back to OCR
         if (imageUri) {
           try {
             const parsedOcr = ocrAnswers ?? (await executeOcr(imageUri));
@@ -226,7 +246,6 @@ export default function BubbleScanner({
       const rawOmr = parsed as DetectedAnswer[];
       setOmrAnswers(rawOmr);
 
-      // Check if results look like noise (e.g. handwritten paper mistaken for bubble sheet)
       if (isLikelyNotBubbleSheet(rawOmr) && imageUri) {
         try {
           const parsedOcr = ocrAnswers ?? (await executeOcr(imageUri));
@@ -234,9 +253,7 @@ export default function BubbleScanner({
           setScanEngine('ocr');
           setAnswers(parsedOcr);
           return;
-        } catch {
-          // If OCR also fails, fall back to OMR
-        }
+        } catch {}
       }
 
       setScanEngine('omr');
@@ -253,7 +270,6 @@ export default function BubbleScanner({
 
   const handleToggleEngine = async () => {
     if (scanEngine === 'omr') {
-      // Switch to OCR
       if (ocrAnswers) {
         setAnswers(ocrAnswers);
         setScanEngine('ocr');
@@ -272,14 +288,12 @@ export default function BubbleScanner({
         }
       }
     } else {
-      // Switch to OMR
       if (omrAnswers) {
         setAnswers(omrAnswers);
         setScanEngine('omr');
       } else if (imageBase64) {
         setProcessing(true);
         setStatusText('Re-analyzing bubbles…');
-        // WebView will re-process
       }
     }
   };
@@ -296,6 +310,7 @@ export default function BubbleScanner({
     setOcrAnswers(null);
     setImageBase64(null);
     setImageUri(null);
+    setOriginalImageUri(null);
     setScanEngine('ocr');
   };
 
@@ -309,7 +324,7 @@ export default function BubbleScanner({
 
     return (
       <View style={styles.container}>
-        {/* Uploaded Sheet Thumbnail Card */}
+        {/* Uploaded Sheet Thumbnail Card with In-App Crop Button */}
         {imageUri && (
           <View style={styles.imageCard}>
             <Image source={{ uri: imageUri }} style={styles.imageThumb} resizeMode="cover" />
@@ -319,13 +334,23 @@ export default function BubbleScanner({
               </Text>
               <Text style={styles.imageCardSub}>
                 {scanEngine === 'ocr'
-                  ? 'Answers recognized via on-device AI OCR'
-                  : 'Bubbles measured via optical density'}
+                  ? 'Recognized via on-device AI OCR'
+                  : 'Measured via optical density'}
               </Text>
             </View>
-            <TouchableOpacity style={styles.imageChangeBtn} onPress={() => capture(false)}>
-              <Text style={styles.imageChangeBtnText}>Change</Text>
-            </TouchableOpacity>
+
+            <View style={styles.imageCardActions}>
+              <TouchableOpacity
+                style={styles.imageCropBtn}
+                onPress={() => setCropModalVisible(true)}
+              >
+                <Text style={styles.imageCropBtnText}>✂️ Crop</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.imageChangeBtn} onPress={() => capture(false)}>
+                <Text style={styles.imageChangeBtnText}>Change</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -347,7 +372,7 @@ export default function BubbleScanner({
 
         <Text style={styles.hint}>
           {scanEngine === 'ocr'
-            ? 'Answers detected from paper. Tap any answer to adjust (cycles A → B → C → D → NA → Blank).'
+            ? 'Answers detected. Tap any answer to adjust (A → B → C → D → NA → Blank), or tap ✂️ Crop to zoom in on answers.'
             : 'Scanned bubbles shown below. Tap any question to change or confirm before grading.'}
         </Text>
 
@@ -357,7 +382,7 @@ export default function BubbleScanner({
               {notAttempted > 0 && `✓ ${notAttempted} not attempted (skipped). `}
               {blanks > 0 && `⚠️ ${blanks} blank. `}
               {multiples > 0 && `⚠️ ${multiples} multiple. `}
-              Tap any row to adjust before grading.
+              Tap any row to adjust or ✂️ Crop to re-frame.
             </Text>
           </View>
         )}
@@ -442,6 +467,19 @@ export default function BubbleScanner({
             <Text style={styles.buttonText}>✓ Confirm & Grade</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Interactive In-App Cropper Modal */}
+        <ImageCropperModal
+          visible={cropModalVisible}
+          imageUri={originalImageUri || imageUri}
+          initialWidth={imageDims.width}
+          initialHeight={imageDims.height}
+          onCropComplete={async (croppedUri) => {
+            setImageUri(croppedUri);
+            await processImage(croppedUri);
+          }}
+          onClose={() => setCropModalVisible(false)}
+        />
       </View>
     );
   }
@@ -453,6 +491,7 @@ export default function BubbleScanner({
         <Text style={styles.uploadCardTitle}>Submit Answer Sheet</Text>
         <Text style={styles.uploadCardDesc}>
           Upload a handwritten answer sheet (e.g. 1 A, 2 C, 3 B, 4 A) or a printed bubble sheet.
+          You can crop the photo to focus directly on the answers.
         </Text>
 
         <View style={styles.buttonRow}>
@@ -462,7 +501,7 @@ export default function BubbleScanner({
             disabled={processing}
           >
             <Text style={styles.actionBtnIcon}>📷</Text>
-            <Text style={styles.actionBtnText}>Scan with Camera</Text>
+            <Text style={styles.actionBtnText}>Scan & Crop</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -471,7 +510,7 @@ export default function BubbleScanner({
             disabled={processing}
           >
             <Text style={styles.actionBtnIcon}>🖼️</Text>
-            <Text style={styles.actionBtnText}>Upload from Gallery</Text>
+            <Text style={styles.actionBtnText}>Upload & Crop</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -503,6 +542,19 @@ export default function BubbleScanner({
           />
         </View>
       )}
+
+      {/* Interactive In-App Cropper Modal */}
+      <ImageCropperModal
+        visible={cropModalVisible}
+        imageUri={originalImageUri || imageUri}
+        initialWidth={imageDims.width}
+        initialHeight={imageDims.height}
+        onCropComplete={async (croppedUri) => {
+          setImageUri(croppedUri);
+          await processImage(croppedUri);
+        }}
+        onClose={() => setCropModalVisible(false)}
+      />
     </View>
   );
 }
@@ -570,7 +622,7 @@ const styles = StyleSheet.create({
     padding: 10,
     borderWidth: 1,
     borderColor: '#CBD5E1',
-    gap: 12,
+    gap: 10,
   },
   imageThumb: {
     width: 52,
@@ -591,12 +643,29 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
+  imageCardActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  imageCropBtn: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  imageCropBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803D',
+  },
   imageChangeBtn: {
     backgroundColor: '#EFF6FF',
     borderWidth: 1,
     borderColor: '#93C5FD',
     borderRadius: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
   },
   imageChangeBtnText: {

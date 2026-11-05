@@ -14,6 +14,7 @@ import TextRecognition from '@react-native-ml-kit/text-recognition';
 
 import { parseAnswerText } from '@/lib/handwritten/parseAnswerText';
 import { DetectedAnswer } from '@/lib/omr/types';
+import ImageCropperModal from '@/components/ImageCropperModal';
 
 interface Props {
   questionCount: number;
@@ -39,6 +40,10 @@ export default function HandwrittenScanner({
 }: Props) {
   const [processing, setProcessing] = useState(false);
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [originalImageUri, setOriginalImageUri] = useState<string | null>(null);
+  const [imageDims, setImageDims] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  const [cropModalVisible, setCropModalVisible] = useState(false);
+
   const [rawText, setRawText] = useState<string | null>(null);
   const [showRaw, setShowRaw] = useState(false);
   const [answers, setAnswers] = useState<DetectedAnswer[] | null>(null);
@@ -70,28 +75,10 @@ export default function HandwrittenScanner({
     );
   };
 
-  const capture = async (fromCamera: boolean) => {
+  const processImage = async (uri: string) => {
+    setProcessing(true);
     try {
-      const permission = fromCamera
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        onError(fromCamera ? 'Camera permission denied' : 'Gallery permission denied');
-        return;
-      }
-
-      const result = fromCamera
-        ? await ImagePicker.launchCameraAsync({ allowsEditing: false, quality: 1 })
-        : await ImagePicker.launchImageLibraryAsync({ allowsEditing: false, quality: 1 });
-
-      if (result.canceled || !result.assets[0]) return;
-
-      const uri = result.assets[0].uri;
-      setImageUri(uri);
-      setProcessing(true);
-
       // 1. High-clarity normalization pass: resizes to optimal OCR resolution (1600px width)
-      //    which enhances line edges and thin pencil strokes for maximum recognition accuracy
       const manipulated = await ImageManipulator.manipulateAsync(
         uri,
         [{ resize: { width: 1600 } }],
@@ -103,13 +90,44 @@ export default function HandwrittenScanner({
       const text = recognition.text ?? '';
       setRawText(text);
 
-      // 3. Multi-stage neural & topological identification (handles direct a-e and numbered 1. a-e)
+      // 3. Multi-stage neural & topological identification
       const parsedAnswers = parseAnswerText(recognition, questionCount, expectedOptionsByQuestion);
       setAnswers(parsedAnswers);
     } catch (err: any) {
       onError(err?.message ?? 'Could not recognise the handwritten answers');
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const capture = async (fromCamera: boolean) => {
+    try {
+      const permission = fromCamera
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        onError(fromCamera ? 'Camera permission denied' : 'Gallery permission denied');
+        return;
+      }
+
+      const result = fromCamera
+        ? await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 1 })
+        : await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, quality: 1 });
+
+      if (result.canceled || !result.assets[0]) return;
+
+      const asset = result.assets[0];
+      setImageUri(asset.uri);
+      setOriginalImageUri(asset.uri);
+      setImageDims({
+        width: asset.width ?? 0,
+        height: asset.height ?? 0,
+      });
+
+      await processImage(asset.uri);
+    } catch (err: any) {
+      setProcessing(false);
+      onError(err?.message ?? 'Failed to capture or load photo');
     }
   };
 
@@ -120,6 +138,7 @@ export default function HandwrittenScanner({
   const handleRetake = () => {
     setAnswers(null);
     setImageUri(null);
+    setOriginalImageUri(null);
     setRawText(null);
     setShowRaw(false);
   };
@@ -132,7 +151,7 @@ export default function HandwrittenScanner({
 
     return (
       <View style={styles.container}>
-        {/* Uploaded Sheet Thumbnail Card */}
+        {/* Uploaded Sheet Thumbnail Card with In-App Crop Button */}
         {imageUri && (
           <View style={styles.imageCard}>
             <Image source={{ uri: imageUri }} style={styles.imageThumb} resizeMode="cover" />
@@ -140,14 +159,22 @@ export default function HandwrittenScanner({
               <Text style={styles.imageCardTitle}>✏️ Handwritten Answer Sheet</Text>
               <Text style={styles.imageCardSub}>Answers identified via on-device AI OCR</Text>
             </View>
-            <TouchableOpacity style={styles.imageChangeBtn} onPress={() => capture(false)}>
-              <Text style={styles.imageChangeBtnText}>Change</Text>
-            </TouchableOpacity>
+            <View style={styles.imageCardActions}>
+              <TouchableOpacity
+                style={styles.imageCropBtn}
+                onPress={() => setCropModalVisible(true)}
+              >
+                <Text style={styles.imageCropBtnText}>✂️ Crop</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.imageChangeBtn} onPress={() => capture(false)}>
+                <Text style={styles.imageChangeBtnText}>Change</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
         <Text style={styles.hint}>
-          Tap any answer to adjust (cycles A → B → C → D → NA → Blank).
+          Tap any answer to adjust (cycles A → B → C → D → NA → Blank), or tap ✂️ Crop to zoom in on answers.
         </Text>
 
         {(blanks > 0 || multiples > 0 || notAttempted > 0) && (
@@ -229,6 +256,19 @@ export default function HandwrittenScanner({
             <Text style={styles.buttonText}>✓ Confirm Answers</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Interactive In-App Cropper Modal */}
+        <ImageCropperModal
+          visible={cropModalVisible}
+          imageUri={originalImageUri || imageUri}
+          initialWidth={imageDims.width}
+          initialHeight={imageDims.height}
+          onCropComplete={async (croppedUri) => {
+            setImageUri(croppedUri);
+            await processImage(croppedUri);
+          }}
+          onClose={() => setCropModalVisible(false)}
+        />
       </View>
     );
   }
@@ -239,15 +279,15 @@ export default function HandwrittenScanner({
       <Text style={styles.hint}>
         Student should write answers as a numbered list:{'\n'}
         <Text style={styles.example}>1. a   2. b   3. c   4. d</Text>
-        {'\n'}Photograph the paper in good, even light.
+        {'\n'}You can crop the photo after taking it to focus strictly on the answers.
       </Text>
 
       <View style={styles.row2}>
         <TouchableOpacity style={styles.button} onPress={() => capture(true)} disabled={processing}>
-          <Text style={styles.buttonText}>📷 Capture</Text>
+          <Text style={styles.buttonText}>📷 Capture & Crop</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.buttonAlt} onPress={() => capture(false)} disabled={processing}>
-          <Text style={styles.buttonTextAlt}>🖼️ Gallery</Text>
+          <Text style={styles.buttonTextAlt}>🖼️ Gallery & Crop</Text>
         </TouchableOpacity>
       </View>
 
@@ -257,6 +297,19 @@ export default function HandwrittenScanner({
           <Text style={styles.processingText}>Reading handwriting…</Text>
         </View>
       )}
+
+      {/* Interactive In-App Cropper Modal */}
+      <ImageCropperModal
+        visible={cropModalVisible}
+        imageUri={originalImageUri || imageUri}
+        initialWidth={imageDims.width}
+        initialHeight={imageDims.height}
+        onCropComplete={async (croppedUri) => {
+          setImageUri(croppedUri);
+          await processImage(croppedUri);
+        }}
+        onClose={() => setCropModalVisible(false)}
+      />
     </View>
   );
 }
@@ -358,7 +411,7 @@ const styles = StyleSheet.create({
     padding: 10,
     borderWidth: 1,
     borderColor: '#CBD5E1',
-    gap: 12,
+    gap: 10,
   },
   imageThumb: {
     width: 52,
@@ -369,12 +422,29 @@ const styles = StyleSheet.create({
   imageCardInfo: { flex: 1 },
   imageCardTitle: { fontSize: 14, fontWeight: '700', color: '#1E293B' },
   imageCardSub: { fontSize: 11, color: '#64748B', marginTop: 2 },
+  imageCardActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  imageCropBtn: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  imageCropBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803D',
+  },
   imageChangeBtn: {
     backgroundColor: '#EFF6FF',
     borderWidth: 1,
     borderColor: '#93C5FD',
     borderRadius: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
   },
   imageChangeBtnText: { fontSize: 12, fontWeight: '700', color: '#1D4ED8' },
